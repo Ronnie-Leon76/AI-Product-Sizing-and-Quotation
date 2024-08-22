@@ -199,3 +199,6 @@ async def get_powerbackup_quotation() -> Dict[str, Any]:
         return quotation
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load quotation: {e}")
+    
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8080)
