@@ -106,6 +106,7 @@ python-magic==0.4.27
 python-multipart==0.0.9
 pytz==2024.1
 PyYAML==6.0.2
+rank-bm25==0.2.2
 rapidfuzz==3.9.6
 regex==2024.7.24
 requests==2.32.3
