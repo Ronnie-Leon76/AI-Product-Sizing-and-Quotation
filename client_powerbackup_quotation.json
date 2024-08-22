@@ -1,0 +1,152 @@
+{
+    "option1": {
+        "name": "Solar Power Backup Solution with Lead Acid Batteries",
+        "battery": {
+            "battery_type": "Lead Acid",
+            "number_of_batteries": 4,
+            "battery_capacity": 200.0,
+            "battery_voltage": 12.0,
+            "total_capacity": 9600.0,
+            "components": [
+                {
+                    "product_model": "Dayliff 200Ah Lead Acid Battery",
+                    "item_category_code": "BATT",
+                    "description": "Deep Cycle Lead Acid Battery",
+                    "quantity": 4,
+                    "unit_price": 15000.0,
+                    "gross_price": 60000.0
+                }
+            ]
+        },
+        "solar_panel": {
+            "number_of_panels": 4,
+            "panel_wattage": 250.0,
+            "total_wattage": 1000.0,
+            "components": [
+                {
+                    "product_model": "Dayliff 250W Solar Panel",
+                    "item_category_code": "SOLAR",
+                    "description": "Polycrystalline Solar Panel",
+                    "quantity": 4,
+                    "unit_price": 12000.0,
+                    "gross_price": 48000.0
+                }
+            ]
+        },
+        "inverter": {
+            "inverter_capacity": 1200.0,
+            "number_of_inverters": 1,
+            "components": [
+                {
+                    "product_model": "Dayliff Optiverter 1200W",
+                    "item_category_code": "INVERTER",
+                    "description": "Pure Sine Wave Inverter with Charger",
+                    "quantity": 1,
+                    "unit_price": 30000.0,
+                    "gross_price": 30000.0
+                }
+            ]
+        },
+        "other_components": [],
+        "subtotal": 138000.0,
+        "vat": 22080.0,
+        "grand_total": 160080.0,
+        "explanation": "This solution includes a solar power backup system with lead-acid batteries, providing a total capacity of 9600Wh, sufficient to cover the daily energy demand of 3000Wh.",
+        "additional_notes": "Lead-acid batteries require regular maintenance and have a shorter lifespan compared to lithium-ion batteries."
+    },
+    "option2": {
+        "name": "Solar Power Backup Solution with Lithium-Ion Batteries",
+        "battery": {
+            "battery_type": "Lithium-Ion",
+            "number_of_batteries": 2,
+            "battery_capacity": 200.0,
+            "battery_voltage": 24.0,
+            "total_capacity": 9600.0,
+            "components": [
+                {
+                    "product_model": "Dayliff Lithium-Ion Battery 200Ah",
+                    "item_category_code": "BATT",
+                    "description": "Deep Cycle Lithium-Ion Battery",
+                    "quantity": 2,
+                    "unit_price": 45000.0,
+                    "gross_price": 90000.0
+                }
+            ]
+        },
+        "solar_panel": {
+            "number_of_panels": 4,
+            "panel_wattage": 250.0,
+            "total_wattage": 1000.0,
+            "components": [
+                {
+                    "product_model": "Dayliff 250W Solar Panel",
+                    "item_category_code": "SOLAR",
+                    "description": "Polycrystalline Solar Panel",
+                    "quantity": 4,
+                    "unit_price": 12000.0,
+                    "gross_price": 48000.0
+                }
+            ]
+        },
+        "inverter": {
+            "inverter_capacity": 1200.0,
+            "number_of_inverters": 1,
+            "components": [
+                {
+                    "product_model": "Dayliff Optiverter 1200W",
+                    "item_category_code": "INVERTER",
+                    "description": "Pure Sine Wave Inverter with Charger",
+                    "quantity": 1,
+                    "unit_price": 30000.0,
+                    "gross_price": 30000.0
+                }
+            ]
+        },
+        "other_components": [],
+        "subtotal": 168000.0,
+        "vat": 26880.0,
+        "grand_total": 194880.0,
+        "explanation": "This solution includes a solar power backup system with lithium-ion batteries, providing a total capacity of 9600Wh, sufficient to cover the daily energy demand of 3000Wh.",
+        "additional_notes": "Lithium-ion batteries have a longer lifespan and require less maintenance compared to lead-acid batteries."
+    },
+    "option3": {
+        "name": "Inverter Power Backup Solution",
+        "inverter": {
+            "inverter_capacity": 3000.0,
+            "number_of_inverters": 1,
+            "components": [
+                {
+                    "product_model": "Dayliff Optiverter 3000W",
+                    "item_category_code": "INVERTER",
+                    "description": "Pure Sine Wave Inverter with Charger",
+                    "quantity": 1,
+                    "unit_price": 45000.0,
+                    "gross_price": 45000.0
+                }
+            ]
+        },
+        "battery": {
+            "battery_type": "Lead Acid",
+            "number_of_batteries": 4,
+            "battery_capacity": 200.0,
+            "battery_voltage": 12.0,
+            "total_capacity": 9600.0,
+            "components": [
+                {
+                    "product_model": "Dayliff 200Ah Lead Acid Battery",
+                    "item_category_code": "BATT",
+                    "description": "Deep Cycle Lead Acid Battery",
+                    "quantity": 4,
+                    "unit_price": 15000.0,
+                    "gross_price": 60000.0
+                }
+            ]
+        },
+        "other_components": [],
+        "subtotal": 105000.0,
+        "vat": 16800.0,
+        "grand_total": 121800.0,
+        "explanation": "This inverter-based power backup solution provides a reliable source of power with a total capacity of 9600Wh, sufficient to cover the daily energy demand of 3000Wh.",
+        "additional_notes": "This solution is ideal for users who require a straightforward inverter-based backup system."
+    }
+}
