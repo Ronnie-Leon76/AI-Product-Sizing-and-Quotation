@@ -1,10 +1,10 @@
 import os
 import json
-import pandas as pd
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 import uvicorn
-from fastapi import FastAPI, HTTPException, Form
+from fastapi import FastAPI, HTTPException
+from langchain.memory import ConversationBufferMemory
 from search_device_wattage import get_item_device_wattage
 from product_sizing_and_quotation import generate_powerbackup_quotation, PowerBackupOptions, SolarPowerSolution, InverterPowerSolution, BatteryOption, SolarPanelOption, InverterOption, Component
 
@@ -17,6 +17,10 @@ solar_equipment_directory_path = os.path.join(os.path.dirname(__file__), 'SOLAR_
 
 if not os.path.exists(solar_equipment_directory_path):
     raise ValueError(f"The directory {solar_equipment_directory_path} does not exist. Please ensure it's created and contains the necessary files.")
+
+
+memory = ConversationBufferMemory()
+
 
 # Pydantic models
 class Item(BaseModel):
@@ -145,10 +149,42 @@ async def process_items(items: List[Item]) -> Dict[str, Any]:
 
     # Generate power backup quotation
     try:
-        quotation = generate_powerbackup_quotation(total_energy_demand)
+        quotation = generate_powerbackup_quotation(energy_demand=total_energy_demand, conversation_level="First_Quotation", memory=memory)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate quotation: {e}")
 
+    if not quotation:
+        raise HTTPException(status_code=500, detail="Quotation generation returned no result.")
+
+    # Format quotation
+    if isinstance(quotation, PowerBackupOptions):
+        formatted_quotation = format_power_backup_options(quotation)
+    elif isinstance(quotation, dict):
+        formatted_quotation = quotation  # Assuming it's already formatted
+    else:
+        raise HTTPException(status_code=500, detail="Unexpected quotation format.")
+
+    # Save formatted quotation to JSON
+    try:
+        with open(CLIENT_POWERBACKUP_QUOTATION_JSON_FILE_PATH, "w") as f:
+            json.dump(formatted_quotation, f, indent=4)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save quotation: {e}")
+
+    return formatted_quotation
+
+
+@app.post("/chat-for-quotation-refinement/", response_model=Dict[str, Any])
+async def refine_quotation_chat(refinement_query: str) -> Dict[str, Any]:
+    """
+    Refine the current quotation based on client input.
+    """
+    # Regenerate the quotation based on the refined input
+    try:
+        quotation = generate_powerbackup_quotation(conversation_level = "Further_Engagement", memory=memory, customer_request=refinement_query)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate refined quotation: {e}")
+    
     if not quotation:
         raise HTTPException(status_code=500, detail="Quotation generation returned no result.")
 

@@ -6,12 +6,12 @@
             "number_of_batteries": 4,
             "battery_capacity": 200.0,
             "battery_voltage": 12.0,
-            "total_capacity": 9600.0,
+            "total_capacity": 800.0,
             "components": [
                 {
-                    "product_model": "Dayliff 200Ah Lead Acid Battery",
+                    "product_model": "DAYLIFF 200Ah Lead Acid Battery",
                     "item_category_code": "BATT",
-                    "description": "Deep Cycle Lead Acid Battery",
+                    "description": "200Ah Lead Acid Battery",
                     "quantity": 4,
                     "unit_price": 15000.0,
                     "gross_price": 60000.0
@@ -19,134 +19,134 @@
             ]
         },
         "solar_panel": {
-            "number_of_panels": 4,
-            "panel_wattage": 250.0,
-            "total_wattage": 1000.0,
+            "number_of_panels": 12,
+            "panel_wattage": 335.0,
+            "total_wattage": 4020.0,
             "components": [
                 {
-                    "product_model": "Dayliff 250W Solar Panel",
+                    "product_model": "DAYLIFF 335W Solar Panel",
                     "item_category_code": "SOLAR",
-                    "description": "Polycrystalline Solar Panel",
-                    "quantity": 4,
-                    "unit_price": 12000.0,
-                    "gross_price": 48000.0
+                    "description": "335W Solar Panel",
+                    "quantity": 12,
+                    "unit_price": 20000.0,
+                    "gross_price": 240000.0
                 }
             ]
         },
         "inverter": {
-            "inverter_capacity": 1200.0,
+            "inverter_capacity": 5.0,
             "number_of_inverters": 1,
             "components": [
                 {
-                    "product_model": "Dayliff Optiverter 1200W",
+                    "product_model": "SUN5KTL-M1",
                     "item_category_code": "INVERTER",
-                    "description": "Pure Sine Wave Inverter with Charger",
+                    "description": "5kW Grid Connect Inverter",
                     "quantity": 1,
-                    "unit_price": 30000.0,
-                    "gross_price": 30000.0
+                    "unit_price": 80000.0,
+                    "gross_price": 80000.0
                 }
             ]
         },
         "other_components": [],
-        "subtotal": 138000.0,
-        "vat": 22080.0,
-        "grand_total": 160080.0,
-        "explanation": "This solution includes a solar power backup system with lead-acid batteries, providing a total capacity of 9600Wh, sufficient to cover the daily energy demand of 3000Wh.",
-        "additional_notes": "Lead-acid batteries require regular maintenance and have a shorter lifespan compared to lithium-ion batteries."
+        "subtotal": 384000.0,
+        "vat": 61440.0,
+        "grand_total": 445440.0,
+        "explanation": "This solution includes a 5kW inverter, 12 solar panels of 335W each, and 4 lead-acid batteries of 200Ah each, providing a reliable backup power solution.",
+        "additional_notes": "Lead-acid batteries have a shorter lifespan compared to lithium-ion batteries but are more cost-effective upfront."
     },
     "option2": {
         "name": "Solar Power Backup Solution with Lithium-Ion Batteries",
         "battery": {
             "battery_type": "Lithium-Ion",
-            "number_of_batteries": 2,
-            "battery_capacity": 200.0,
-            "battery_voltage": 24.0,
-            "total_capacity": 9600.0,
+            "number_of_batteries": 4,
+            "battery_capacity": 100.0,
+            "battery_voltage": 48.0,
+            "total_capacity": 400.0,
             "components": [
                 {
-                    "product_model": "Dayliff Lithium-Ion Battery 200Ah",
+                    "product_model": "DAYLIFF 100Ah Lithium-Ion Battery",
                     "item_category_code": "BATT",
-                    "description": "Deep Cycle Lithium-Ion Battery",
-                    "quantity": 2,
-                    "unit_price": 45000.0,
-                    "gross_price": 90000.0
+                    "description": "100Ah Lithium-Ion Battery",
+                    "quantity": 4,
+                    "unit_price": 30000.0,
+                    "gross_price": 120000.0
                 }
             ]
         },
         "solar_panel": {
-            "number_of_panels": 4,
-            "panel_wattage": 250.0,
-            "total_wattage": 1000.0,
+            "number_of_panels": 12,
+            "panel_wattage": 335.0,
+            "total_wattage": 4020.0,
             "components": [
                 {
-                    "product_model": "Dayliff 250W Solar Panel",
+                    "product_model": "DAYLIFF 335W Solar Panel",
                     "item_category_code": "SOLAR",
-                    "description": "Polycrystalline Solar Panel",
-                    "quantity": 4,
-                    "unit_price": 12000.0,
-                    "gross_price": 48000.0
+                    "description": "335W Solar Panel",
+                    "quantity": 12,
+                    "unit_price": 20000.0,
+                    "gross_price": 240000.0
                 }
             ]
         },
         "inverter": {
-            "inverter_capacity": 1200.0,
+            "inverter_capacity": 5.0,
             "number_of_inverters": 1,
             "components": [
                 {
-                    "product_model": "Dayliff Optiverter 1200W",
+                    "product_model": "SUN5KTL-M1",
                     "item_category_code": "INVERTER",
-                    "description": "Pure Sine Wave Inverter with Charger",
+                    "description": "5kW Grid Connect Inverter",
                     "quantity": 1,
-                    "unit_price": 30000.0,
-                    "gross_price": 30000.0
+                    "unit_price": 80000.0,
+                    "gross_price": 80000.0
                 }
             ]
         },
         "other_components": [],
-        "subtotal": 168000.0,
-        "vat": 26880.0,
-        "grand_total": 194880.0,
-        "explanation": "This solution includes a solar power backup system with lithium-ion batteries, providing a total capacity of 9600Wh, sufficient to cover the daily energy demand of 3000Wh.",
-        "additional_notes": "Lithium-ion batteries have a longer lifespan and require less maintenance compared to lead-acid batteries."
+        "subtotal": 400000.0,
+        "vat": 64000.0,
+        "grand_total": 464000.0,
+        "explanation": "This solution includes a 5kW inverter, 12 solar panels of 335W each, and 4 lithium-ion batteries of 100Ah each, providing a reliable and efficient backup power solution.",
+        "additional_notes": "Lithium-ion batteries offer a longer lifespan and better efficiency compared to lead-acid batteries."
     },
     "option3": {
         "name": "Inverter Power Backup Solution",
         "inverter": {
-            "inverter_capacity": 3000.0,
+            "inverter_capacity": 5.0,
             "number_of_inverters": 1,
             "components": [
                 {
-                    "product_model": "Dayliff Optiverter 3000W",
+                    "product_model": "SUN5KTL-M1",
                     "item_category_code": "INVERTER",
-                    "description": "Pure Sine Wave Inverter with Charger",
+                    "description": "5kW Grid Connect Inverter",
                     "quantity": 1,
-                    "unit_price": 45000.0,
-                    "gross_price": 45000.0
+                    "unit_price": 80000.0,
+                    "gross_price": 80000.0
                 }
             ]
         },
         "battery": {
-            "battery_type": "Lead Acid",
-            "number_of_batteries": 4,
-            "battery_capacity": 200.0,
-            "battery_voltage": 12.0,
-            "total_capacity": 9600.0,
-            "components": [
-                {
-                    "product_model": "Dayliff 200Ah Lead Acid Battery",
-                    "item_category_code": "BATT",
-                    "description": "Deep Cycle Lead Acid Battery",
-                    "quantity": 4,
-                    "unit_price": 15000.0,
-                    "gross_price": 60000.0
-                }
-            ]
+            "battery_type": "None",
+            "number_of_batteries": 0,
+            "battery_capacity": 0.0,
+            "battery_voltage": 0.0,
+            "total_capacity": 0.0,
+            "components": []
         },
-        "other_components": [],
-        "subtotal": 105000.0,
-        "vat": 16800.0,
-        "grand_total": 121800.0,
-        "explanation": "This inverter-based power backup solution provides a reliable source of power with a total capacity of 9600Wh, sufficient to cover the daily energy demand of 3000Wh.",
-        "additional_notes": "This solution is ideal for users who require a straightforward inverter-based backup system."
+        "other_components": [
+            {
+                "product_model": "Export Limiting Meter",
+                "item_category_code": "METER",
+                "description": "External power export limiting meter",
+                "quantity": 1,
+                "unit_price": 15000.0,
+                "gross_price": 15000.0
+            }
+        ],
+        "subtotal": 95000.0,
+        "vat": 15200.0,
+        "grand_total": 110200.0,
+        "explanation": "This solution includes a 5kW inverter and an export limiting meter, allowing for grid-tied operation without battery backup.",
+        "additional_notes": "This option is ideal for users who want to feed excess power back to the grid without the need for battery storage."
     }
 }

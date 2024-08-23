@@ -51,11 +51,9 @@ def get_item_device_wattage(item_name: str, item_model_name: str) -> int:
         return llm_chain.invoke({**input_, "messages": [ai_msg, *tool_msgs]}, config=config)
     query_str = f"What is the wattage of a {item_model_name} {item_name}? Output should be as follows: Average Wattage: XX Watts"
     results = tool_chain.invoke(query_str)
-    print(results.content)
     match = re.search(r'Average Wattage:\s*(\d+)\s*Watts', results.content)
     if match:
         wattage = int(match.group(1))
-        print(f"Found wattage: {wattage}")
     else:
         wattage = 300
     return wattage

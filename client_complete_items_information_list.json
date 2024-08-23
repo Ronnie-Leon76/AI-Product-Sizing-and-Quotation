@@ -1,9 +1,23 @@
 [
     {
-        "item_name": "TV",
+        "item_name": "55-inch Smart TV",
         "item_device_power_rating": 300,
         "item_device_quantity": 1,
         "item_device_total_power": 300,
-        "item_device_running_hours": 10.0
+        "item_device_running_hours": 8.0
+    },
+    {
+        "item_name": "Microwave",
+        "item_device_power_rating": 1000,
+        "item_device_quantity": 1,
+        "item_device_total_power": 1000,
+        "item_device_running_hours": 3.0
+    },
+    {
+        "item_name": "Two-door fridge",
+        "item_device_power_rating": 300,
+        "item_device_quantity": 1,
+        "item_device_total_power": 300,
+        "item_device_running_hours": 8.0
     }
 ]

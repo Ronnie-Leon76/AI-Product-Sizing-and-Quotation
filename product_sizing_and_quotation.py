@@ -9,9 +9,8 @@ from langchain.schema. document import Document
 from langchain_community.vectorstores import FAISS
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain.retrievers import BM25Retriever, EnsembleRetriever
-from langchain_core.prompts import ChatPromptTemplate
 from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain
+from langchain.memory import ConversationBufferMemory
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain.output_parsers import PydanticOutputParser, OutputFixingParser
@@ -173,7 +172,7 @@ def load_bm25_retriever():
     return bm25_retriever
 
 
-def generate_powerbackup_quotation(energy_demand: str):
+def generate_powerbackup_quotation(energy_demand=None, conversation_level: str = None, memory: ConversationBufferMemory = None, customer_request=None):
     """
     Generate a power backup quotation based on the energy demand
     :param energy_demand: energy demand of the client
@@ -244,11 +243,15 @@ def generate_powerbackup_quotation(energy_demand: str):
         bm25_retriever = load_bm25_retriever()
     ensemble_retriever = EnsembleRetriever(retrievers=[bm25_retriever, faiss_retriever], weights=[0.5, 0.5])
     output_parser = PydanticOutputParser(pydantic_object=PowerBackupOptions)
+    memory = ConversationBufferMemory()
     prompt = PromptTemplate(
         template="""
         You are the Davis & Shirtliff Senior Solar Energy Engineer. Your task is to attend to the following request: {question}
         You will consider only Dayliff solar backup products. Use the following pieces of relevant information:\n{context}
         
+        Chat History:
+        {chat_history}
+
         Provide a detailed quotation for three power backup solutions, ensuring that each solution includes:
         - A solar power backup solution with lead-acid batteries.
         - A solar power backup solution with lithium-ion batteries.
@@ -258,18 +261,27 @@ def generate_powerbackup_quotation(energy_demand: str):
         Ensure the output conforms to the specified format.
         {format_instructions}
         """,
-        input_variables=["question", "context"],
+        input_variables=["question", "context", "chat_history"],
         partial_variables={"format_instructions": output_parser.get_format_instructions()}
     )
     rag_chain = (
-        {"context": ensemble_retriever , "question": RunnablePassthrough()}
+        {"context": ensemble_retriever , "question": RunnablePassthrough(), "chat_history": lambda x: memory.chat_memory.messages}
         | prompt
         | llm
         | StrOutputParser()
     )
-    query_str = f"Provide a comprehensive analysis and quotation for the three most suitable Dayliff power backup solutions to support an energy demand of {energy_demand} Watt-hours per day in Kenya."
-    output = rag_chain.invoke(query_str)
-    new_parser = OutputFixingParser.from_llm(parser=output_parser, llm=llm)
-    new_output = new_parser.parse(output)
-    return new_output
+    if conversation_level == "First_Quotation":
+        query_str = f"Provide a comprehensive analysis and quotation for the three most suitable Dayliff power backup solutions to support an energy demand of {energy_demand} Watt-hours per day in Kenya."
+        output = rag_chain.invoke(query_str)
+        memory.save_context({"input": query_str}, {"output": output})
+        new_parser = OutputFixingParser.from_llm(parser=output_parser, llm=llm)
+        new_output = new_parser.parse(output)
+        return new_output
+    elif conversation_level == "Further_Engagement":
+        query_str = customer_request
+        output = rag_chain.invoke(query_str)
+        memory.save_context({"input": query_str}, {"output": output})
+        new_parser = OutputFixingParser.from_llm(parser=output_parser, llm=llm)
+        new_output = new_parser.parse(output)
+        return new_output
     
