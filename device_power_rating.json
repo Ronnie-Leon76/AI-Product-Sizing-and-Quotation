@@ -1,0 +1,191 @@
+{
+    "Refrigerator": {
+        "average_wattage": 500
+    },
+    "Microwave": {
+        "average_wattage": 900
+    },
+    "Oven": {
+        "average_wattage": 3500
+    },
+    "Dishwasher": {
+        "average_wattage": 1800
+    },
+    "Toaster": {
+        "average_wattage": 1200
+    },
+    "Coffee Maker": {
+        "average_wattage": 900
+    },
+    "Blender": {
+        "average_wattage": 300
+    },
+    "Electric Stove": {
+        "average_wattage": 2500
+    },
+    "Cooker": {
+        "average_wattage": 200
+    },
+    "Electric Grill": {
+        "average_wattage": 1500
+    },
+    "Air Conditioner": {
+        "average_wattage": 2400
+    },
+    "Space Heater": {
+        "average_wattage": 1500
+    },
+    "Electric Water Heater": {
+        "average_wattage": 2500
+    },
+    "Washing Machine": {
+        "average_wattage": 1000
+    },
+    "Dryer": {
+        "average_wattage": 3500
+    },
+    "Iron": {
+        "average_wattage": 1200
+    },
+    "Vacuum Cleaner": {
+        "average_wattage": 1400
+    },
+    "Hair Dryer": {
+        "average_wattage": 1300
+    },
+    "Electric Kettle": {
+        "average_wattage": 1500
+    },
+    "Smartphone Charger": {
+        "average_wattage": 10
+    },
+    "Laptop Charger": {
+        "average_wattage": 65
+    },
+    "Desktop Computer": {
+        "average_wattage": 200
+    },
+    "Laptop": {
+        "average_wattage": 50
+    },
+    "Printer": {
+        "average_wattage": 40
+    },
+    "Scanner": {
+        "average_wattage": 20
+    },
+    "Modem/Router": {
+        "average_wattage": 10
+    },
+    "LCD Monitor": {
+        "average_wattage": 30
+    },
+    "Plasma TV": {
+        "average_wattage": 300
+    },
+    "LED TV": {
+        "average_wattage": 100
+    },
+    "Video Game Console": {
+        "average_wattage": 180
+    },
+    "Sound System": {
+        "average_wattage": 95
+    },
+    "Home Theater System": {
+        "average_wattage": 350
+    },
+    "DVD/Blu-ray Player": {
+        "average_wattage": 15
+    },
+    "Cable/Satellite Box": {
+        "average_wattage": 30
+    },
+    "Incandescent Bulb (60W)": {
+        "average_wattage": 60
+    },
+    "Incandescent Bulb (100W)": {
+        "average_wattage": 100
+    },
+    "LED Bulb (10W)": {
+        "average_wattage": 10
+    },
+    "LED Bulb (15W)": {
+        "average_wattage": 15
+    },
+    "CFL Bulb (14W)": {
+        "average_wattage": 14
+    },
+    "CFL Bulb (23W)": {
+        "average_wattage": 23
+    },
+    "Ceiling Fan": {
+        "average_wattage": 75
+    },
+    "Portable Fan": {
+        "average_wattage": 50
+    },
+    "Treadmill": {
+        "average_wattage": 600
+    },
+    "Elliptical Trainer": {
+        "average_wattage": 750
+    },
+    "Aquarium": {
+        "average_wattage": 50
+    },
+    "Electric Lawn Mower": {
+        "average_wattage": 1500
+    },
+    "Electric Leaf Blower": {
+        "average_wattage": 1000
+    },
+    "Garage Door Opener": {
+        "average_wattage": 350
+    },
+    "Humidifier": {
+        "average_wattage": 200
+    },
+    "Dehumidifier": {
+        "average_wattage": 500
+    },
+    "Air Purifier": {
+        "average_wattage": 50
+    },
+    "Electric Shaver": {
+        "average_wattage": 15
+    },
+    "Electric Toothbrush": {
+        "average_wattage": 2
+    },
+    "Baby Monitor": {
+        "average_wattage": 3
+    },
+    "Wi-Fi Extender": {
+        "average_wattage": 6
+    },
+    "Wireless Phone Charger": {
+        "average_wattage": 10
+    },
+    "Security Camera": {
+        "average_wattage": 5
+    },
+    "Smart Speaker": {
+        "average_wattage": 5
+    },
+    "Smart Light Switch": {
+        "average_wattage": 2
+    },
+    "Smart Thermostat": {
+        "average_wattage": 7
+    },
+    "Smart Doorbell": {
+        "average_wattage": 10
+    },
+    "Robot Vacuum": {
+        "average_wattage": 50
+    },
+    "Air Fryer": {
+        "average_wattage": 1600
+    }
+}

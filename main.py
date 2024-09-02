@@ -33,6 +33,7 @@ class Item(BaseModel):
     item_model_name: str
     item_quantity: int
     running_hours: float
+    location: str
 
 class CompleteItemInformation(BaseModel):
     item_name: str
@@ -136,6 +137,7 @@ async def process_items(items: List[Item]) -> Dict[str, Any]:
     """
     complete_item_information = []
     total_energy_demand = 0.0
+    location = items[0].location
 
     # Process each item
     for item in items:
@@ -161,15 +163,24 @@ async def process_items(items: List[Item]) -> Dict[str, Any]:
 
     # Save complete item information to JSON
     try:
+        if os.path.exists(CLIENT_COMPLETE_ITEMS_INFORMATION_LIST_JSON_FILE_PATH):
+            with open(CLIENT_COMPLETE_ITEMS_INFORMATION_LIST_JSON_FILE_PATH, "r") as f:
+                existing_data = json.load(f)
+        else:
+            existing_data = []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load existing item information: {e}")
+
+    # Append new item information to existing data
+    updated_data = existing_data + [item.dict() for item in complete_item_information]
+
+    # Save updated item information to JSON
+    try:
         with open(CLIENT_COMPLETE_ITEMS_INFORMATION_LIST_JSON_FILE_PATH, "w") as f:
-            json.dump(
-                [item.dict() for item in complete_item_information], 
-                f, 
-                indent=4
-            )
+            json.dump(updated_data, f, indent=4)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save item information: {e}")
-
+    
     # Generate power backup quotation
     try:
         quotation = generate_powerbackup_quotation(energy_demand=total_energy_demand, conversation_level="First_Quotation", memory=memory)
@@ -187,10 +198,29 @@ async def process_items(items: List[Item]) -> Dict[str, Any]:
     else:
         raise HTTPException(status_code=500, detail="Unexpected quotation format.")
 
-    # Save formatted quotation to JSON
+    # Add location to the formatted quotation
+    formatted_quotation["location"] = location
+
+    # Load existing quotation data if it exists
+    try:
+        if os.path.exists(CLIENT_POWERBACKUP_QUOTATION_JSON_FILE_PATH):
+            with open(CLIENT_POWERBACKUP_QUOTATION_JSON_FILE_PATH, "r") as f:
+                existing_quotations = json.load(f)
+            # Ensure existing_quotations is a list
+            if not isinstance(existing_quotations, list):
+                existing_quotations = [existing_quotations]
+        else:
+            existing_quotations = []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load existing quotation information: {e}")
+
+    # Append the new quotation to existing data
+    existing_quotations.append(formatted_quotation)
+
+    # Save the updated quotations to JSON
     try:
         with open(CLIENT_POWERBACKUP_QUOTATION_JSON_FILE_PATH, "w") as f:
-            json.dump(formatted_quotation, f, indent=4)
+            json.dump(existing_quotations, f, indent=4)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save quotation: {e}")
 
@@ -244,8 +274,8 @@ async def get_complete_items_information_list() -> List[CompleteItemInformation]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load item information: {e}")
 
-@app.get("/get-powerbackup-quotation/", response_model=Dict[str, Any])
-async def get_powerbackup_quotation() -> Dict[str, Any]:
+@app.get("/get-powerbackup-quotation/", response_model=List[Dict[str, Any]])
+async def get_powerbackup_quotation() -> List[Dict[str, Any]]:
     """
     Retrieve the latest power backup quotation.
     """
