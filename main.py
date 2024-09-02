@@ -1,9 +1,12 @@
 import os
 import json
+import gc
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 import uvicorn
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from langchain.memory import ConversationBufferMemory
 from search_device_wattage import get_item_device_wattage
 from product_sizing_and_quotation import generate_powerbackup_quotation, PowerBackupOptions, SolarPowerSolution, InverterPowerSolution, BatteryOption, SolarPanelOption, InverterOption, Component
@@ -18,6 +21,8 @@ solar_equipment_directory_path = os.path.join(os.path.dirname(__file__), 'SOLAR_
 if not os.path.exists(solar_equipment_directory_path):
     raise ValueError(f"The directory {solar_equipment_directory_path} does not exist. Please ensure it's created and contains the necessary files.")
 
+
+origins = ["*"]
 
 memory = ConversationBufferMemory()
 
@@ -109,6 +114,21 @@ def format_component(component: Component) -> Dict[str, Any]:
 # Initialize FastAPI app
 app = FastAPI()
 
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/")
+async def redirect_to_docs():
+    return RedirectResponse(url="/docs")
+
+
 @app.post("/process-items-and-generate-a-quotation/", response_model=Dict[str, Any])
 async def process_items(items: List[Item]) -> Dict[str, Any]:
     """
@@ -135,6 +155,9 @@ async def process_items(items: List[Item]) -> Dict[str, Any]:
             item_device_running_hours=item.running_hours
         )
         complete_item_information.append(complete_item_info)
+
+    # Clear memory after processing items
+    gc.collect()
 
     # Save complete item information to JSON
     try:
@@ -237,4 +260,4 @@ async def get_powerbackup_quotation() -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Failed to load quotation: {e}")
     
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    uvicorn.run(app, host='0.0.0.0', port=8000)
