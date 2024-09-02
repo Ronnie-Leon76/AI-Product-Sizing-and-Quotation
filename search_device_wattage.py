@@ -6,7 +6,7 @@ import openai
 from dotenv import load_dotenv, find_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_community.utilities import GoogleSerperAPIWrapper
-from langchain.agents import initialize_agent, Tool, AgentType
+from langchain.agents import initialize_agent, Tool, AgentType, AgentExecutor
 
 # Load environment variables
 load_dotenv(find_dotenv())
@@ -29,7 +29,7 @@ tools = [
         description="Use this tool for search-based queries."
     )
 ]
-agent = initialize_agent(tools, llm, agent=AgentType.SELF_ASK_WITH_SEARCH, verbose=True)
+agent = initialize_agent(tools, llm, agent=AgentType.SELF_ASK_WITH_SEARCH)
 
 def get_item_device_wattage(item_name: str, item_model_name: str) -> int:
     """
@@ -56,7 +56,7 @@ def get_item_device_wattage(item_name: str, item_model_name: str) -> int:
     
     # If wattage is not found in JSON, use Serper search
     query_str = f"What is the average wattage of a {item_name} {item_model_name}? Output should be as follows: Average Wattage: XX Watts"
-    results = agent.run(query_str)
+    results = agent.run(query_str, handle_parsing_errors=True)
     
     # Extract wattage from search results
     wattage = extract_wattage(results)
@@ -66,7 +66,7 @@ def get_item_device_wattage(item_name: str, item_model_name: str) -> int:
             f"Please clarify the wattage for {item_model_name} {item_name}, "
             "or provide an estimated wattage."
         )
-        fallback_results = agent.run(fallback_query_str)
+        fallback_results = agent.run(fallback_query_str, handle_parsing_errors=True)
         wattage = extract_wattage(fallback_results)
     
     if wattage is None:
