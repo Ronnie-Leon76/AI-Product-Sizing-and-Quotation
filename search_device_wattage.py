@@ -18,6 +18,7 @@ if not serper_api_key:
 
 # Constants
 POWER_RATING_JSON_FILE_PATH = "device_power_rating.json"
+DEFAULT_WATTAGE = 200  # New constant for default wattage
 
 # Initialize models and tools
 llm = ChatOpenAI(temperature=0.1, model_name="gpt-4o-mini")
@@ -56,7 +57,11 @@ def get_item_device_wattage(item_name: str, item_model_name: str) -> int:
     
     # If wattage is not found in JSON, use Serper search
     query_str = f"What is the average wattage of a {item_name} {item_model_name}? Output should be as follows: Average Wattage: XX Watts"
-    results = agent.run(query_str, handle_parsing_errors=True)
+    try:
+        results = agent.run(query_str, handle_parsing_errors=True)
+    except Exception as e:
+        print(f"Error during agent.run: {e}")
+        return DEFAULT_WATTAGE
     
     # Extract wattage from search results
     wattage = extract_wattage(results)
@@ -66,11 +71,15 @@ def get_item_device_wattage(item_name: str, item_model_name: str) -> int:
             f"Please clarify the wattage for {item_model_name} {item_name}, "
             "or provide an estimated wattage."
         )
-        fallback_results = agent.run(fallback_query_str, handle_parsing_errors=True)
-        wattage = extract_wattage(fallback_results)
+        try:
+            fallback_results = agent.run(fallback_query_str, handle_parsing_errors=True)
+            wattage = extract_wattage(fallback_results)
+        except Exception as e:
+            print(f"Error during fallback agent.run: {e}")
+            return DEFAULT_WATTAGE
     
     if wattage is None:
-        wattage = 100  # Default wattage if not found
+        wattage = DEFAULT_WATTAGE  # Use the default wattage constant
     
     # Update JSON with new device data
     if item_name not in power_rating_data:
