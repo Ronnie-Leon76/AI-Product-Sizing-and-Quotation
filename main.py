@@ -104,6 +104,7 @@ def format_inverter_option(inverter: InverterOption) -> Dict[str, Any]:
 
 def format_component(component: Component) -> Dict[str, Any]:
     return {
+        "no": component.no,
         "product_model": component.product_model,
         "item_category_code": component.item_category_code,
         "description": component.description,

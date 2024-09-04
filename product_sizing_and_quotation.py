@@ -1,10 +1,12 @@
 import os, sys
+from typing import List, Optional, Literal
 import gc
-from typing import List, Optional
 from pydantic import BaseModel, Field
 import pandas as pd
 import pickle
 import openai
+import requests
+from requests.auth import HTTPBasicAuth
 from tqdm.auto import tqdm
 from langchain.schema.document import Document
 from langchain_community.vectorstores import FAISS
@@ -27,6 +29,9 @@ from dotenv import load_dotenv, find_dotenv
 _ = load_dotenv(find_dotenv())
 
 openai.api_key = os.environ["OPENAI_API_KEY"]
+API_USERNAME = os.getenv('API_USERNAME')
+API_PASSWORD = os.getenv('API_PASSWORD')
+BASE_URL = os.getenv('BASE_URL')
 
 DB_FAISS_PATH = "vectorstore/db_faiss"
 DIR_PATH = "SOLAR_EQUIPMENT_AND_ACCESSORIES"
@@ -36,22 +41,67 @@ llm = ChatOpenAI(temperature=0.1, model_name="gpt-4o-mini")
 csv_path = os.path.join(os.path.dirname(__file__), "solar_items.csv")
 df = pd.read_csv(csv_path)
 
+unique_no_values = df["No."].unique().tolist()
 
-def get_unit_price(product_model: str, item_category_code: str) -> float:
+NoOptions = Literal[tuple(unique_no_values)]
+
+def get_unit_price(no: str) -> tuple:
     """Fetch the unit price from the dataframe based on product model and item category code."""
-    row = df[
-        (df["Product Model"] == product_model)
-        & (df["Item Category Code"] == item_category_code)
-    ]
-    if not row.empty:
-        return row["Unit Price"].values[0]
+    item_details = fetch_item_details(no)
+    if item_details and "unit_price" in item_details:
+        return item_details["unit_price"], item_details["inventory"]
     else:
-        raise ValueError(
-            f"Unit price not found for model {product_model} and category {item_category_code}"
-        )
+        product_model = item_details.get("product_model", "")
+        item_category_code = item_details.get("item_category_code", "")
+        if product_model and item_category_code:
+            row = df[
+                (df["Product Model"] == product_model)
+                & (df["Item Category Code"] == item_category_code)
+            ]
+            if not row.empty:
+                return row["Unit Price"].values[0], item_details["inventory"]
+            else:
+                raise ValueError(
+                    f"Unit price not found for model {product_model} and category {item_category_code}"
+                )
 
+def fetch_item_details(no: str, username: str = API_USERNAME, password: str = API_PASSWORD) -> dict:
+    """Fetch item details from the API based on the 'no' field, using basic authentication."""
+    base_url = BASE_URL
+    params = {"$filter": f"No eq '{no}'"}
+    
+    try:
+        response = requests.get(
+            base_url, 
+            params=params, 
+            auth=HTTPBasicAuth(username, password)
+        )
+        response.raise_for_status()
+        data = response.json()
+        if 'value' in data and len(data['value']) > 0:
+            item_data = data['value'][0]
+            return {
+                'inventory': int(item_data.get('Inventory', 0)),
+                'unit_price': float(item_data.get('Unit_Price', 0)),
+                'description': item_data.get('Description', ''),
+                'item_category_code': item_data.get('Item_Category_Code', ''),
+                'product_model': item_data.get('Product_Model', '')
+            }
+        else:
+            return {}
+    except requests.RequestException as e:
+        print(f"Error fetching data for item {no}: {str(e)}")
+        return {}
+    
+def validate_quantity(requested_quantity: int, available_inventory: int) -> int:
+    """Ensure the requested quantity does not exceed the available inventory."""
+    if requested_quantity > available_inventory:
+        print(f"Warning: Requested quantity ({requested_quantity}) exceeds available inventory ({available_inventory}). Adjusting quantity to available inventory.")
+        return available_inventory
+    return requested_quantity
 
 class Component(BaseModel):
+    no: NoOptions = Field(..., description="Product number of the component. Must be one of the predefined options.")
     product_model: str = Field(..., description="Model of the Dayliff product")
     item_category_code: str = Field(..., description="Category code of the item")
     description: str = Field(..., description="Description of the component")
@@ -69,18 +119,20 @@ class Component(BaseModel):
     @classmethod
     def from_excel(
         cls,
+        no: str,
         product_model: str,
         item_category_code: str,
         description: str,
         quantity: int,
     ):
-        unit_price = get_unit_price(product_model, item_category_code)
-        gross_price = quantity * unit_price
+        unit_price, inventory = get_unit_price(product_model, item_category_code)
+        valid_quantity = validate_quantity(quantity, inventory)
+        gross_price = valid_quantity * unit_price
         return cls(
             product_model=product_model,
             item_category_code=item_category_code,
             description=description,
-            quantity=quantity,
+            quantity=valid_quantity,
             unit_price=unit_price,
             gross_price=gross_price,
         )
