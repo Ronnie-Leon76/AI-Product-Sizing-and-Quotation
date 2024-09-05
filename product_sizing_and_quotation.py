@@ -125,7 +125,7 @@ class Component(BaseModel):
         description: str,
         quantity: int,
     ):
-        unit_price, inventory = get_unit_price(product_model, item_category_code)
+        unit_price, inventory = get_unit_price(no)
         valid_quantity = validate_quantity(quantity, inventory)
         gross_price = valid_quantity * unit_price
         return cls(
