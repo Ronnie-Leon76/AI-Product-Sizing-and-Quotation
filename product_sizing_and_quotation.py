@@ -1,5 +1,6 @@
 import os, sys
 from typing import List, Optional, Literal
+import gc
 from pydantic import BaseModel, Field
 import pandas as pd
 import pickle
