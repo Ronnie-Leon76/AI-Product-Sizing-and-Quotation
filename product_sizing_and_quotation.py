@@ -41,14 +41,26 @@ csv_path = os.path.join(os.path.dirname(__file__), "solar_items.csv")
 df = pd.read_csv(csv_path)
 
 unique_no_values = df["No."].unique().tolist()
+unique_product_models = df["Product Model"].unique().tolist()
+unique_item_category_codes = df["Item Category Code"].unique().tolist()
 
 NoOptions = Literal[tuple(unique_no_values)]
+ProductModelsOptions = Literal[tuple(unique_product_models)]
+ItemCategoryCodesOptions = Literal[tuple(unique_item_category_codes)]
+
+def load_item_descriptions():
+    csv_path = os.path.join(os.path.dirname(__file__), "solar_items.csv")
+    df = pd.read_csv(csv_path)
+    return df[["No.", "Description"]]
+
+def format_item_descriptions(df):
+    return "\n".join([f"{row['No.']} - {row['Description']}" for _, row in df.iterrows()])
 
 def get_unit_price(no: str) -> tuple:
     """Fetch the unit price from the dataframe based on product model and item category code."""
     item_details = fetch_item_details(no)
     if item_details and "unit_price" in item_details:
-        return item_details["unit_price"], item_details["inventory"]
+        return item_details["unit_price"], item_details["inventory"], item_details["description"], item_details["item_category_code"], item_details["product_model"]
     else:
         product_model = item_details.get("product_model", "")
         item_category_code = item_details.get("item_category_code", "")
@@ -58,7 +70,7 @@ def get_unit_price(no: str) -> tuple:
                 & (df["Item Category Code"] == item_category_code)
             ]
             if not row.empty:
-                return row["Unit Price"].values[0], item_details["inventory"]
+                return row["Unit Price"].values[0], item_details["inventory"], item_details["description"], item_details["item_category_code"], item_details["product_model"]
             else:
                 raise ValueError(
                     f"Unit price not found for model {product_model} and category {item_category_code}"
@@ -80,6 +92,7 @@ def fetch_item_details(no: str, username: str = API_USERNAME, password: str = AP
         if 'value' in data and len(data['value']) > 0:
             item_data = data['value'][0]
             return {
+                'no': item_data.get('No', ''),
                 'inventory': int(item_data.get('Inventory', 0)),
                 'unit_price': float(item_data.get('Unit_Price', 0)),
                 'description': item_data.get('Description', ''),
@@ -91,6 +104,7 @@ def fetch_item_details(no: str, username: str = API_USERNAME, password: str = AP
     except requests.RequestException as e:
         print(f"Error fetching data for item {no}: {str(e)}")
         return {}
+
     
 def validate_quantity(requested_quantity: int, available_inventory: int) -> int:
     """Ensure the requested quantity does not exceed the available inventory."""
@@ -101,40 +115,12 @@ def validate_quantity(requested_quantity: int, available_inventory: int) -> int:
 
 class Component(BaseModel):
     no: NoOptions = Field(..., description="Product number of the component. Must be one of the predefined options.")
-    product_model: str = Field(..., description="Model of the Dayliff product")
-    item_category_code: str = Field(..., description="Category code of the item")
+    product_model: ProductModelsOptions = Field(..., description="Model of the Dayliff product")
+    item_category_code: ItemCategoryCodesOptions = Field(..., description="Category code of the item")
     description: str = Field(..., description="Description of the component")
     quantity: int = Field(..., description="Number of units of this component")
-    unit_price: float = Field(..., description="Price per unit in KES")
-    gross_price: float = Field(
-        ...,
-        description="Total cost for the component, calculated as quantity * unit_price",
-    )
-
-    @property
-    def calculate_gross_price(self) -> float:
-        return self.quantity * self.unit_price
-
-    @classmethod
-    def from_excel(
-        cls,
-        no: str,
-        product_model: str,
-        item_category_code: str,
-        description: str,
-        quantity: int,
-    ):
-        unit_price, inventory = get_unit_price(no)
-        valid_quantity = validate_quantity(quantity, inventory)
-        gross_price = valid_quantity * unit_price
-        return cls(
-            product_model=product_model,
-            item_category_code=item_category_code,
-            description=description,
-            quantity=valid_quantity,
-            unit_price=unit_price,
-            gross_price=gross_price,
-        )
+    unit_price: float = Field(0.0, description="Price per unit in KES")
+    gross_price: float = Field(0.0, description="Total cost for the component")
 
 
 class BatteryOption(BaseModel):
@@ -184,33 +170,15 @@ class SolarPowerSolution(BaseModel):
     other_components: List[Component] = Field(
         ..., description="Other components in the solar power solution"
     )
-    subtotal: float = Field(..., description="Subtotal of all components in KES")
-    vat: float = Field(..., description="Value Added Tax at 16%")
-    grand_total: float = Field(..., description="Total cost including VAT")
+    subtotal: float = Field(0.0, description="Subtotal of all components in KES")
+    vat: float = Field(0.0, description="Value Added Tax at 16%")
+    grand_total: float = Field(0.0, description="Total cost including VAT")
     explanation: str = Field(
         ..., description="Detailed explanation of the Solar Power Solution"
     )
     additional_notes: Optional[str] = Field(
         None, description="Additional notes on warranties, maintenance, etc."
     )
-
-    @property
-    def calculate_subtotal(self) -> float:
-        return sum(
-            component.gross_price
-            for component in self.battery.components
-            + self.solar_panel.components
-            + self.inverter.components
-            + self.other_components
-        )
-
-    @property
-    def calculate_vat(self) -> float:
-        return self.calculate_subtotal * 0.16
-
-    @property
-    def calculate_grand_total(self) -> float:
-        return self.calculate_subtotal + self.calculate_vat
 
 
 class InverterPowerSolution(BaseModel):
@@ -224,33 +192,16 @@ class InverterPowerSolution(BaseModel):
         ..., description="Other components in the inverter power solution"
     )
     subtotal: float = Field(
-        ..., description="Subtotal of all components in the solution"
+        0.0, description="Subtotal of all components in the solution"
     )
-    vat: float = Field(..., description="Value Added Tax at 16%")
-    grand_total: float = Field(..., description="Total cost including VAT")
+    vat: float = Field(0.0, description="Value Added Tax at 16%")
+    grand_total: float = Field(0.0, description="Total cost including VAT")
     explanation: str = Field(
         ..., description="Detailed explanation of the Inverter Power Solution"
     )
     additional_notes: Optional[str] = Field(
         None, description="Additional notes on warranties, maintenance, etc."
     )
-
-    @property
-    def calculate_subtotal(self) -> float:
-        return sum(
-            component.gross_price
-            for component in self.inverter.components
-            + self.battery.components
-            + self.other_components
-        )
-
-    @property
-    def calculate_vat(self) -> float:
-        return self.calculate_subtotal * 0.16
-
-    @property
-    def calculate_grand_total(self) -> float:
-        return self.calculate_subtotal + self.calculate_vat
 
 
 class PowerBackupOptions(BaseModel):
@@ -309,6 +260,8 @@ def generate_powerbackup_quotation(
     """
     bm25_retriever = None
     embedding_model = load_embedding_model()
+    item_descriptions_df = load_item_descriptions()
+    item_descriptions_string = format_item_descriptions(item_descriptions_df)
     if not os.path.exists(DB_FAISS_PATH) or not os.path.exists("bm25_retriever.pkl"):
         documents = []
         pdf_files = []
@@ -392,12 +345,23 @@ def generate_powerbackup_quotation(
         Chat History:
         {chat_history}
 
+        Here is a list of all available Dayliff components No. with their corresponding descriptions:
+        {item_descriptions}
+
         Provide a detailed quotation for three power backup solutions{location_clause}, ensuring that each solution includes:
         - A solar power backup solution with lead-acid batteries.
         - A solar power backup solution with lithium-ion batteries.
         - An inverter-based power backup solution.
-        
-        The quotation should include product models, components, unit prices, quantities, gross prices, subtotal, VAT, and grand total.
+
+        For each component in the solutions, provide the following information:
+        - Accurate product number (no)
+        - Correct product model
+        - Appropriate item category code
+        - Detailed description (ensure it matches exactly with the provided item descriptions)
+        - Required quantity
+
+        When specifying components, always use the exact No. and Description pairs from the list provided above.
+        Do not include unit prices, gross prices, or VAT calculations in your response. These will be handled separately.
         Ensure the output conforms to the specified format.
         {format_instructions}
     """
@@ -406,7 +370,7 @@ def generate_powerbackup_quotation(
 
     prompt = PromptTemplate(
         template=prompt_template,
-        input_variables=["question", "context", "chat_history"],
+        input_variables=["question", "context", "chat_history", "item_descriptions"],
         partial_variables={
             "format_instructions": output_parser.get_format_instructions(),
             "location_clause": location_clause,
@@ -418,6 +382,7 @@ def generate_powerbackup_quotation(
             "context": ensemble_retriever,
             "question": RunnablePassthrough(),
             "chat_history": lambda x: memory.chat_memory.messages,
+            "item_descriptions": lambda x: item_descriptions_string,
         }
         | prompt
         | llm
@@ -429,12 +394,47 @@ def generate_powerbackup_quotation(
         output = rag_chain.invoke(query_str)
         memory.save_context({"input": query_str}, {"output": output})
         new_parser = OutputFixingParser.from_llm(parser=output_parser, llm=llm)
-        new_output = new_parser.parse(output)
-        return new_output
+        quotation = new_parser.parse(output)
+        return add_pricing_information(quotation)
     elif conversation_level == "Further_Engagement":
         query_str = customer_request
         output = rag_chain.invoke(query_str)
         memory.save_context({"input": query_str}, {"output": output})
         new_parser = OutputFixingParser.from_llm(parser=output_parser, llm=llm)
-        new_output = new_parser.parse(output)
-        return new_output
+        quotation = new_parser.parse(output)
+        return add_pricing_information(quotation)
+
+def calculate_subtotal(solution):
+    """Calculate the subtotal for a power solution, accounting for different types of solutions."""
+    subtotal = 0.0
+    
+    if isinstance(solution, InverterPowerSolution):
+        for component_list in [solution.inverter.components, solution.battery.components, solution.other_components]:
+            for component in component_list:
+                unit_price, inventory, _, _, _ = get_unit_price(component.no)
+                component.unit_price = unit_price
+                quantity = component.quantity
+                valid_quantity = validate_quantity(quantity, inventory)
+                component.quantity = valid_quantity
+                component.gross_price = unit_price * component.quantity
+        subtotal = sum(c.gross_price for c in solution.inverter.components + solution.battery.components + solution.other_components)
+    else:
+        for component_list in [solution.solar_panel.components, solution.battery.components, solution.inverter.components, solution.other_components]:
+            for component in component_list:
+                unit_price, inventory, _, _, _ = get_unit_price(component.no)
+                component.unit_price = unit_price
+                quantity = component.quantity
+                valid_quantity = validate_quantity(quantity, inventory)
+                component.quantity = valid_quantity
+                component.gross_price = unit_price * component.quantity
+        subtotal = sum(c.gross_price for c in solution.solar_panel.components + solution.battery.components + solution.inverter.components + solution.other_components)
+    return subtotal
+
+
+def add_pricing_information(quotation: PowerBackupOptions):
+    """Add pricing details like subtotal, VAT, and grand total for the solutions."""
+    for option in [quotation.option1, quotation.option2, quotation.option3]:
+        option.subtotal = calculate_subtotal(option)
+        option.vat = option.subtotal * 0.16
+        option.grand_total = option.subtotal + option.vat
+    return quotation
