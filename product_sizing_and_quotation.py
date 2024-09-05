@@ -1,4 +1,5 @@
 import os, sys
+import logging
 from typing import List, Optional, Literal
 import gc
 from pydantic import BaseModel, Field
@@ -27,6 +28,9 @@ sys.path.append("../..")
 from dotenv import load_dotenv, find_dotenv
 
 _ = load_dotenv(find_dotenv())
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 openai.api_key = os.environ["OPENAI_API_KEY"]
 API_USERNAME = os.getenv('API_USERNAME')
@@ -259,151 +263,162 @@ def generate_powerbackup_quotation(
     :param energy_demand: energy demand of the client
     :return: power backup quotation
     """
-    bm25_retriever = None
-    embedding_model = load_embedding_model()
-    item_descriptions_df = load_item_descriptions()
-    item_descriptions_string = format_item_descriptions(item_descriptions_df)
-    if not os.path.exists(DB_FAISS_PATH) or not os.path.exists("bm25_retriever.pkl"):
-        documents = []
-        pdf_files = []
-        csv_files = []
-        for root, dirs, files in os.walk(DIR_PATH):
-            pdf_files.extend(
-                [os.path.join(root, f) for f in files if f.endswith(".pdf")]
-            )
-            csv_files.extend(
-                [os.path.join(root, f) for f in files if f.endswith(".csv")]
-            )
+    try:
+        bm25_retriever = None
+        embedding_model = load_embedding_model()
+        item_descriptions_df = load_item_descriptions()
+        item_descriptions_string = format_item_descriptions(item_descriptions_df)
+        if not os.path.exists(DB_FAISS_PATH) or not os.path.exists("bm25_retriever.pkl"):
+            documents = []
+            pdf_files = []
+            csv_files = []
+            for root, dirs, files in os.walk(DIR_PATH):
+                pdf_files.extend(
+                    [os.path.join(root, f) for f in files if f.endswith(".pdf")]
+                )
+                csv_files.extend(
+                    [os.path.join(root, f) for f in files if f.endswith(".csv")]
+                )
 
-        for pdf_file in tqdm(pdf_files, desc="Processing PDF files"):
-            try:
-                df = extract_text_and_metadata_from_pdf_document(pdf_file)
-                print(f"Extracted text and metadata from {pdf_file}")
-                for index, row in tqdm(
-                    df.iterrows(), total=len(df), desc="Processing rows"
-                ):
-                    file_name = row["Filename"]
-                    text = row["Text"]
-                    page_number = row["Page_Number"]
-                    document = Document(
-                        page_content=text,
-                        metadata={
-                            "id": f"{index}_{file_name}_{page_number}",
-                            "type": "text",
-                            "filename": file_name,
-                            "page_number": page_number,
-                        },
-                    )
-                    documents.append(document)
-            except Exception as e:
-                print(f"Error processing {pdf_file}: {str(e)}")
+            for pdf_file in tqdm(pdf_files, desc="Processing PDF files"):
+                try:
+                    df = extract_text_and_metadata_from_pdf_document(pdf_file)
+                    print(f"Extracted text and metadata from {pdf_file}")
+                    for index, row in tqdm(
+                        df.iterrows(), total=len(df), desc="Processing rows"
+                    ):
+                        file_name = row["Filename"]
+                        text = row["Text"]
+                        page_number = row["Page_Number"]
+                        document = Document(
+                            page_content=text,
+                            metadata={
+                                "id": f"{index}_{file_name}_{page_number}",
+                                "type": "text",
+                                "filename": file_name,
+                                "page_number": page_number,
+                            },
+                        )
+                        documents.append(document)
+                except Exception as e:
+                    print(f"Error processing {pdf_file}: {str(e)}")
 
-        for csv_file in tqdm(csv_files, desc="Processing CSV files"):
-            try:
-                df = extract_text_and_metadata_from_csv_document(csv_file)
-                print(f"Extracted text and metadata from {pdf_file}")
-                for index, row in tqdm(
-                    df.iterrows(), total=len(df), desc="Processing rows"
-                ):
-                    file_name = row["Filename"]
-                    text = row["Text"]
-                    page_number = row["Page_Number"]
-                    document = Document(
-                        page_content=text,
-                        metadata={
-                            "id": f"{index}_{file_name}_{page_number}",
-                            "type": "text",
-                            "filename": file_name,
-                            "page_number": page_number,
-                        },
-                    )
-                    documents.append(document)
-            except Exception as e:
-                print(f"Error processing {pdf_file}: {str(e)}")
+            for csv_file in tqdm(csv_files, desc="Processing CSV files"):
+                try:
+                    df = extract_text_and_metadata_from_csv_document(csv_file)
+                    print(f"Extracted text and metadata from {pdf_file}")
+                    for index, row in tqdm(
+                        df.iterrows(), total=len(df), desc="Processing rows"
+                    ):
+                        file_name = row["Filename"]
+                        text = row["Text"]
+                        page_number = row["Page_Number"]
+                        document = Document(
+                            page_content=text,
+                            metadata={
+                                "id": f"{index}_{file_name}_{page_number}",
+                                "type": "text",
+                                "filename": file_name,
+                                "page_number": page_number,
+                            },
+                        )
+                        documents.append(document)
+                except Exception as e:
+                    print(f"Error processing {pdf_file}: {str(e)}")
 
-        # Save documents as a pickle file
-        with open("documents.pkl", "wb") as f:
-            pickle.dump(documents, f)
+            # Save documents as a pickle file
+            with open("documents.pkl", "wb") as f:
+                pickle.dump(documents, f)
 
-        create_vector_db(documents, embedding_model)
-        bm25_retriever = initialize_bm25_retriever(documents)
-    db = FAISS.load_local(
-        DB_FAISS_PATH, embedding_model, allow_dangerous_deserialization=True
-    )
-    faiss_retriever = db.as_retriever()
-    if not bm25_retriever:
-        bm25_retriever = load_bm25_retriever()
-    ensemble_retriever = EnsembleRetriever(
-        retrievers=[bm25_retriever, faiss_retriever], weights=[0.5, 0.5]
-    )
-    output_parser = PydanticOutputParser(pydantic_object=PowerBackupOptions)
-    memory = ConversationBufferMemory()
-    # Set up the prompt with location included if provided
-    prompt_template = """
-        You are the Davis & Shirtliff Senior Solar Energy Engineer. Your task is to attend to the following request: {question}
-        You will consider only Dayliff solar backup products. Use the following pieces of relevant information:\n{context}
-        
-        Chat History:
-        {chat_history}
+            create_vector_db(documents, embedding_model)
+            bm25_retriever = initialize_bm25_retriever(documents)
+        db = FAISS.load_local(
+            DB_FAISS_PATH, embedding_model, allow_dangerous_deserialization=True
+        )
+        faiss_retriever = db.as_retriever()
+        if not bm25_retriever:
+            bm25_retriever = load_bm25_retriever()
+        ensemble_retriever = EnsembleRetriever(
+            retrievers=[bm25_retriever, faiss_retriever], weights=[0.5, 0.5]
+        )
+        output_parser = PydanticOutputParser(pydantic_object=PowerBackupOptions)
+        memory = ConversationBufferMemory()
+        # Set up the prompt with location included if provided
+        prompt_template = """
+            You are the Davis & Shirtliff Senior Solar Energy Engineer. Your task is to attend to the following request: {question}
+            You will consider only Dayliff solar backup products. Use the following pieces of relevant information:\n{context}
+            
+            Chat History:
+            {chat_history}
 
-        Here is a list of all available Dayliff components No. with their corresponding descriptions:
-        {item_descriptions}
+            Here is a list of all available Dayliff components No. with their corresponding descriptions:
+            {item_descriptions}
 
-        Provide a detailed quotation for three power backup solutions{location_clause}, ensuring that each solution includes:
-        - A solar power backup solution with lead-acid batteries.
-        - A solar power backup solution with lithium-ion batteries.
-        - An inverter-based power backup solution.
+            Provide a detailed quotation for three power backup solutions{location_clause}, ensuring that each solution includes:
+            - A solar power backup solution with lead-acid batteries.
+            - A solar power backup solution with lithium-ion batteries.
+            - An inverter-based power backup solution.
 
-        For each component in the solutions, provide the following information:
-        - Accurate product number (no)
-        - Correct product model
-        - Appropriate item category code
-        - Detailed description (ensure it matches exactly with the provided item descriptions)
-        - Required quantity
+            For each component in the solutions, provide the following information:
+            - Accurate product number (no)
+            - Correct product model
+            - Appropriate item category code
+            - Detailed description (ensure it matches exactly with the provided item descriptions)
+            - Required quantity
 
-        When specifying components, always use the exact No. and Description pairs from the list provided above.
-        Do not include unit prices, gross prices, or VAT calculations in your response. These will be handled separately.
-        Ensure the output conforms to the specified format.
-        {format_instructions}
-    """
+            When specifying components, always use the exact No. and Description pairs from the list provided above.
+            Do not include unit prices, gross prices, or VAT calculations in your response. These will be handled separately.
+            Ensure the output conforms to the specified format.
+            {format_instructions}
+        """
 
-    location_clause = f" to be installed in {location}" if location else ""
+        location_clause = f" to be installed in {location}" if location else ""
 
-    prompt = PromptTemplate(
-        template=prompt_template,
-        input_variables=["question", "context", "chat_history", "item_descriptions"],
-        partial_variables={
-            "format_instructions": output_parser.get_format_instructions(),
-            "location_clause": location_clause,
-        },
-    )
+        prompt = PromptTemplate(
+            template=prompt_template,
+            input_variables=["question", "context", "chat_history", "item_descriptions"],
+            partial_variables={
+                "format_instructions": output_parser.get_format_instructions(),
+                "location_clause": location_clause,
+            },
+        )
 
-    rag_chain = (
-        {
-            "context": ensemble_retriever,
-            "question": RunnablePassthrough(),
-            "chat_history": lambda x: memory.chat_memory.messages,
-            "item_descriptions": lambda x: item_descriptions_string,
-        }
-        | prompt
-        | llm
-        | StrOutputParser()
-    )
+        rag_chain = (
+            {
+                "context": ensemble_retriever,
+                "question": RunnablePassthrough(),
+                "chat_history": lambda x: memory.chat_memory.messages,
+                "item_descriptions": lambda x: item_descriptions_string,
+            }
+            | prompt
+            | llm
+            | StrOutputParser()
+        )
 
-    if conversation_level == "First_Quotation":
-        query_str = f"Provide a comprehensive analysis and quotation for the three most suitable Dayliff power backup solutions to support an energy demand of {energy_demand} Watt-hours per day{location_clause}."
-        output = rag_chain.invoke(query_str)
-        memory.save_context({"input": query_str}, {"output": output})
-        new_parser = OutputFixingParser.from_llm(parser=output_parser, llm=llm)
-        quotation = new_parser.parse(output)
-        return add_pricing_information(quotation)
-    elif conversation_level == "Further_Engagement":
-        query_str = customer_request
-        output = rag_chain.invoke(query_str)
-        memory.save_context({"input": query_str}, {"output": output})
-        new_parser = OutputFixingParser.from_llm(parser=output_parser, llm=llm)
-        quotation = new_parser.parse(output)
-        return add_pricing_information(quotation)
+        if conversation_level == "First_Quotation":
+            query_str = f"Provide a comprehensive analysis and quotation for the three most suitable Dayliff power backup solutions to support an energy demand of {energy_demand} Watt-hours per day{location_clause}."
+            logger.debug(f"Query string: {query_str}")
+            output = rag_chain.invoke(query_str)
+            logger.debug(f"RAG chain output: {output}")
+            memory.save_context({"input": query_str}, {"output": output})
+            new_parser = OutputFixingParser.from_llm(parser=output_parser, llm=llm)
+            quotation = new_parser.parse(output)
+            logger.debug(f"Parsed quotation: {quotation}")
+            if quotation is None:
+                raise ValueError("Quotation parsing resulted in None")
+            final_quotation = add_pricing_information(quotation)
+            logger.debug(f"Final quotation with pricing: {final_quotation}")
+            return final_quotation
+        elif conversation_level == "Further_Engagement":
+            query_str = customer_request
+            output = rag_chain.invoke(query_str)
+            memory.save_context({"input": query_str}, {"output": output})
+            new_parser = OutputFixingParser.from_llm(parser=output_parser, llm=llm)
+            quotation = new_parser.parse(output)
+            return add_pricing_information(quotation)
+    except Exception as e:
+        logger.exception(f"Error in generate_powerbackup_quotation: {str(e)}")
+        raise
 
 def calculate_subtotal(solution):
     """Calculate the subtotal for a power solution, accounting for different types of solutions."""
