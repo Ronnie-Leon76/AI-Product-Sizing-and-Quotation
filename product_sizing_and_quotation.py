@@ -410,25 +410,26 @@ def calculate_subtotal(solution):
     subtotal = 0.0
     
     if isinstance(solution, InverterPowerSolution):
-        for component_list in [solution.inverter.components, solution.battery.components, solution.other_components]:
-            for component in component_list:
-                unit_price, inventory, _, _, _ = get_unit_price(component.no)
-                component.unit_price = unit_price
-                quantity = component.quantity
-                valid_quantity = validate_quantity(quantity, inventory)
-                component.quantity = valid_quantity
-                component.gross_price = unit_price * component.quantity
-        subtotal = sum(c.gross_price for c in solution.inverter.components + solution.battery.components + solution.other_components)
+        component_lists = [solution.inverter.components, solution.battery.components, solution.other_components]
     else:
-        for component_list in [solution.solar_panel.components, solution.battery.components, solution.inverter.components, solution.other_components]:
-            for component in component_list:
-                unit_price, inventory, _, _, _ = get_unit_price(component.no)
+        component_lists = [solution.solar_panel.components, solution.battery.components, solution.inverter.components, solution.other_components]
+    
+    for component_list in component_lists:
+        for component in component_list:
+            unit_price, inventory, description, item_category_code, product_model = get_unit_price(component.no)
+            if unit_price > 0:
                 component.unit_price = unit_price
+                component.description = description
+                component.item_category_code = item_category_code
+                component.product_model = product_model
                 quantity = component.quantity
                 valid_quantity = validate_quantity(quantity, inventory)
                 component.quantity = valid_quantity
                 component.gross_price = unit_price * component.quantity
-        subtotal = sum(c.gross_price for c in solution.solar_panel.components + solution.battery.components + solution.inverter.components + solution.other_components)
+                subtotal += component.gross_price
+            else:
+                print(f"Warning: Unable to calculate price for component {component.no}")
+    
     return subtotal
 
 
