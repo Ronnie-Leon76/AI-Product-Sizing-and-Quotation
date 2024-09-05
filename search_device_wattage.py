@@ -6,7 +6,7 @@ import openai
 from dotenv import load_dotenv, find_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_community.utilities import GoogleSerperAPIWrapper
-from langchain.agents import initialize_agent, Tool, AgentType, AgentExecutor
+from langchain.agents import initialize_agent, Tool, AgentType
 
 # Load environment variables
 load_dotenv(find_dotenv())
@@ -50,15 +50,17 @@ def get_item_device_wattage(item_name: str, item_model_name: str) -> int:
     else:
         power_rating_data = {}
     
-    wattage = power_rating_data.get(item_name, {}).get("average_wattage")
+    # Concatenate the item name and model name
+    item_name_ = f"{item_model_name} {item_name}"
+    wattage = power_rating_data.get(item_name_, {}).get("average_wattage")
     
     if wattage is not None:
         return wattage
     
     # If wattage is not found in JSON, use Serper search
-    query_str = f"What is the average wattage of a {item_name} {item_model_name}? Output should be as follows: Average Wattage: XX Watts"
+    query_str = f"What is the wattage of a {item_model_name} {item_name}? Output should be as follows: Wattage: XX Watts"
     try:
-        results = agent.run(query_str, handle_parsing_errors=True)
+        results = agent.run(query_str)
     except Exception as e:
         print(f"Error during agent.run: {e}")
         return DEFAULT_WATTAGE
@@ -72,7 +74,7 @@ def get_item_device_wattage(item_name: str, item_model_name: str) -> int:
             "or provide an estimated wattage."
         )
         try:
-            fallback_results = agent.run(fallback_query_str, handle_parsing_errors=True)
+            fallback_results = agent.run(fallback_query_str)
             wattage = extract_wattage(fallback_results)
         except Exception as e:
             print(f"Error during fallback agent.run: {e}")
@@ -82,8 +84,8 @@ def get_item_device_wattage(item_name: str, item_model_name: str) -> int:
         wattage = DEFAULT_WATTAGE  # Use the default wattage constant
     
     # Update JSON with new device data
-    if item_name not in power_rating_data:
-        power_rating_data[item_name] = {"average_wattage": wattage}
+    if item_name_ not in power_rating_data:
+        power_rating_data[item_name_] = {"average_wattage": wattage}
         try:
             with open(POWER_RATING_JSON_FILE_PATH, "w") as f:
                 json.dump(power_rating_data, f, indent=4)
@@ -93,7 +95,7 @@ def get_item_device_wattage(item_name: str, item_model_name: str) -> int:
     return wattage
 
 def extract_wattage(text: str) -> int:
-    match = re.search(r"Average Wattage:\s*(\d+)\s*Watts", text)
+    match = re.search(r"Wattage:\s*(\d+)\s*Watts", text)
     if match:
         return int(match.group(1))
     numbers = re.findall(r"\d+", text)
