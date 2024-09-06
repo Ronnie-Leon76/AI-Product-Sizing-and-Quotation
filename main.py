@@ -35,6 +35,14 @@ class Item(BaseModel):
     running_hours: float
     location: str
 
+class ItemResponse(BaseModel):
+    item_name: str
+    item_model: str
+    quantity: int
+    running_hours: float
+    wattage: int
+    energy_demand: float
+
 class CompleteItemInformation(BaseModel):
     item_name: str
     item_device_power_rating: int
@@ -141,6 +149,7 @@ async def process_items(items: List[Item]) -> Dict[str, Any]:
     location = items[0].location
 
     # Process each item
+    item_responses = []
     for item in items:
         try:
             power_rating = get_item_device_wattage(item.item_name, item.item_model_name)
@@ -149,6 +158,17 @@ async def process_items(items: List[Item]) -> Dict[str, Any]:
         
         total_power = item.item_quantity * power_rating
         total_energy_demand += total_power * item.running_hours
+
+        item_response = ItemResponse(
+            item_name=item.item_name,
+            item_model=item.item_model_name,
+            quantity=item.item_quantity,
+            running_hours=item.running_hours,
+            wattage=power_rating,
+            energy_demand=total_power * item.running_hours
+        )
+
+        item_responses.append(item_response.model_dump())
 
         complete_item_info = CompleteItemInformation(
             item_name=item.item_name,
@@ -201,6 +221,9 @@ async def process_items(items: List[Item]) -> Dict[str, Any]:
 
     # Add location to the formatted quotation
     formatted_quotation["location"] = location
+
+    # Add item responses to the formatted quotation
+    formatted_quotation["items"] = item_responses
 
     # Load existing quotation data if it exists
     try:

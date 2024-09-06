@@ -4,9 +4,14 @@ import json
 import datetime
 import openai
 from dotenv import load_dotenv, find_dotenv
+from langchain_core.pydantic_v1 import BaseModel, Field
+from langchain_core.agents import AgentActionMessageLog, AgentFinish
 from langchain_openai import ChatOpenAI
 from langchain_community.utilities import GoogleSerperAPIWrapper
-from langchain.agents import initialize_agent, Tool, AgentType
+from langchain.agents import initialize_agent, Tool, AgentType, AgentExecutor
+from langchain.agents.format_scratchpad import format_to_openai_function_messages
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.utils.function_calling import convert_to_openai_function
 
 # Load environment variables
 load_dotenv(find_dotenv())
@@ -20,17 +25,75 @@ if not serper_api_key:
 POWER_RATING_JSON_FILE_PATH = "device_power_rating.json"
 DEFAULT_WATTAGE = 200  # New constant for default wattage
 
+class Response(BaseModel):
+    """
+    Final response to the question being asked
+    """
+    wattage: int = Field(
+        ...,
+        title="Wattage",
+        description="The wattage of the device in Watts."
+    )
+
+prompt = ChatPromptTemplate.from_messages(
+    [
+        ("system", "You are a helpful assistant tasked with finding accurate information about electronic devices and their power consumption. Use the Google Search tool when you need to look up specific details."),
+        ("human", "{input}"),
+        MessagesPlaceholder(variable_name="agent_scratchpad"),
+    ]
+)
+
+
 # Initialize models and tools
 llm = ChatOpenAI(temperature=0.1, model_name="gpt-4o-mini")
 search = GoogleSerperAPIWrapper()
 tools = [
     Tool(
-        name="Intermediate Answer",
+        name="Google Search",
         func=search.run,
-        description="Use this tool for search-based queries."
+        description="Useful for when you need to answer questions about current events or the current state of the world. Use this to search for specific information online."
     )
 ]
-agent = initialize_agent(tools, llm, agent=AgentType.SELF_ASK_WITH_SEARCH)
+
+
+response_tool = convert_to_openai_function(Response)
+llm_with_tools = llm.bind_functions(tools + [response_tool])
+# agent = initialize_agent(tools, llm, agent=AgentType.SELF_ASK_WITH_SEARCH, verbose=True)
+
+
+def parse(output):
+    # If no function was invoked, return to user
+    if "function_call" not in output.additional_kwargs:
+        return AgentFinish(return_values={"output": output.content}, log=output.content)
+
+    # Parse out the function call
+    function_call = output.additional_kwargs["function_call"]
+    name = function_call["name"]
+    inputs = json.loads(function_call["arguments"])
+
+    # If the Response function was invoked, return to the user with the function inputs
+    if name == "Response":
+        return AgentFinish(return_values=inputs, log=str(function_call))
+    # Otherwise, return an agent action
+    else:
+        return AgentActionMessageLog(
+            tool=name, tool_input=inputs, log="", message_log=[output]
+        )
+
+agent = (
+    {
+        "input": lambda x: x["input"],
+        # Format agent scratchpad from intermediate steps
+        "agent_scratchpad": lambda x: format_to_openai_function_messages(
+            x["intermediate_steps"]
+        ),
+    }
+    | prompt
+    | llm_with_tools
+    | parse
+)
+
+agent_executor = AgentExecutor(tools=tools, agent=agent, verbose=True, max_iterations=3)
 
 def get_item_device_wattage(item_name: str, item_model_name: str) -> int:
     """
@@ -57,28 +120,30 @@ def get_item_device_wattage(item_name: str, item_model_name: str) -> int:
     if wattage is not None:
         return wattage
     
-    # If wattage is not found in JSON, use Serper search
-    query_str = f"What is the wattage of a {item_model_name} {item_name}? Output should be as follows: Wattage: XX Watts"
+    query_str = f"What is the average power consumption in watts for a {item_model_name} {item_name}? Please provide a single numeric value if possible."
     try:
-        results = agent.run(query_str)
+        results = agent_executor.invoke({"input": query_str})
+        wattage = results.get("wattage")
+        if wattage is None:
+            wattage = extract_wattage(results.get("output", ""))
     except Exception as e:
-        print(f"Error during agent.run: {e}")
+        print(f"Error during agent_executor.invoke: {e}")
         return DEFAULT_WATTAGE
     
     # Extract wattage from search results
-    wattage = extract_wattage(results)
+    # wattage = extract_wattage(results)
     
-    if wattage is None:
-        fallback_query_str = (
-            f"Please clarify the wattage for {item_model_name} {item_name}, "
-            "or provide an estimated wattage."
-        )
-        try:
-            fallback_results = agent.run(fallback_query_str)
-            wattage = extract_wattage(fallback_results)
-        except Exception as e:
-            print(f"Error during fallback agent.run: {e}")
-            return DEFAULT_WATTAGE
+    # if wattage is None:
+    #     fallback_query_str = (
+    #         f"Please clarify the wattage for {item_model_name} {item_name}, "
+    #         "or provide an estimated wattage."
+    #     )
+    #     try:
+    #         fallback_results = agent.run(fallback_query_str)
+    #         wattage = extract_wattage(fallback_results)
+    #     except Exception as e:
+    #         print(f"Error during fallback agent.run: {e}")
+    #         return DEFAULT_WATTAGE
     
     if wattage is None:
         wattage = DEFAULT_WATTAGE  # Use the default wattage constant
@@ -95,11 +160,16 @@ def get_item_device_wattage(item_name: str, item_model_name: str) -> int:
     return wattage
 
 def extract_wattage(text: str) -> int:
-    match = re.search(r"Wattage:\s*(\d+)\s*Watts", text)
+    match = re.search(r"(\d+)\s*(?:W|Watts?|watt)", text, re.IGNORECASE)
+    if match:
+        return int(match.group(1))
+    match = re.search(r"(\d+)\s*W", text, re.IGNORECASE)
     if match:
         return int(match.group(1))
     numbers = re.findall(r"\d+", text)
     if numbers:
-        wattage_values = [int(num) for num in numbers]
-        return sum(wattage_values) // len(wattage_values)  # Calculate average
+        wattage_values = [int(num) for num in numbers if int(num) < 10000]
+        if wattage_values:
+            return sum(wattage_values) // len(wattage_values)
+    
     return None

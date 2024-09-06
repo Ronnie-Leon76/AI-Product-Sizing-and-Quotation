@@ -1,7 +1,8 @@
 import os, sys
 import logging
+import json
 from typing import List, Optional, Literal
-import gc
+import gc, re
 from pydantic import BaseModel, Field
 import pandas as pd
 import pickle
@@ -18,6 +19,13 @@ from langchain.memory import ConversationBufferMemory
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain.output_parsers import PydanticOutputParser, OutputFixingParser
+from langchain_community.utilities import GoogleSerperAPIWrapper
+from langchain_core.pydantic_v1 import BaseModel as BaseModel_, Field as Field_
+from langchain_core.agents import AgentActionMessageLog, AgentFinish
+from langchain.agents import initialize_agent, Tool, AgentType, AgentExecutor
+from langchain.agents.format_scratchpad import format_to_openai_function_messages
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.utils.function_calling import convert_to_openai_function
 from Ingestion.ingest import (
     extract_text_and_metadata_from_pdf_document,
     extract_text_and_metadata_from_csv_document,
@@ -33,6 +41,7 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 openai.api_key = os.environ["OPENAI_API_KEY"]
+serper_api_key = os.getenv("SERPER_API_KEY")
 API_USERNAME = os.getenv('API_USERNAME')
 API_PASSWORD = os.getenv('API_PASSWORD')
 BASE_URL = os.getenv('BASE_URL')
@@ -40,7 +49,74 @@ BASE_URL = os.getenv('BASE_URL')
 DB_FAISS_PATH = "vectorstore/db_faiss"
 DIR_PATH = "SOLAR_EQUIPMENT_AND_ACCESSORIES"
 
+
+if not serper_api_key:
+    raise ValueError("Please set the environment variable SERPER_API_KEY")
+
+class Response(BaseModel_):
+    """
+    Final response to the question being asked
+    """
+    description: str = Field_(..., description="Detailed description of the alternative component")
+    price: float = Field_(..., description="Price of the alternative component in KES")
+    available_quantity: int = Field_(..., description="Available quantity of the alternative component")
+
+prompt = ChatPromptTemplate.from_messages(
+    [
+        ("system", "You are a helpful assistant tasked with finding alternative component from credible online stores selling solar energy power products. Use the Google Search tool when you need to look up specific details."),
+        ("human", "{input}"),
+        MessagesPlaceholder(variable_name="agent_scratchpad"),
+    ]
+)
+
 llm = ChatOpenAI(temperature=0.1, model_name="gpt-4o-mini")
+search = GoogleSerperAPIWrapper()
+tools = [
+    Tool(
+        name="Google Search",
+        func=search.run,
+        description="Useful for when you need to answer questions about current events or the current state of the world. Use this to search for specific information online."
+    )
+]
+
+response_tool = convert_to_openai_function(Response)
+llm_with_tools = llm.bind_functions(tools + [response_tool])
+# agent = initialize_agent(tools, llm, agent=AgentType.SELF_ASK_WITH_SEARCH)
+
+def parse(output):
+    # If no function was invoked, return to user
+    if "function_call" not in output.additional_kwargs:
+        return AgentFinish(return_values={"output": output.content}, log=output.content)
+
+    # Parse out the function call
+    function_call = output.additional_kwargs["function_call"]
+    name = function_call["name"]
+    inputs = json.loads(function_call["arguments"])
+
+    # If the Response function was invoked, return to the user with the function inputs
+    if name == "Response":
+        return AgentFinish(return_values=inputs, log=str(function_call))
+    # Otherwise, return an agent action
+    else:
+        return AgentActionMessageLog(
+            tool=name, tool_input=inputs, log="", message_log=[output]
+        )
+
+
+agent = (
+    {
+        "input": lambda x: x["input"],
+        # Format agent scratchpad from intermediate steps
+        "agent_scratchpad": lambda x: format_to_openai_function_messages(
+            x["intermediate_steps"]
+        ),
+    }
+    | prompt
+    | llm_with_tools
+    | parse
+)
+
+agent_executor = AgentExecutor(tools=tools, agent=agent, verbose=True)
 
 csv_path = os.path.join(os.path.dirname(__file__), "solar_items.csv")
 df = pd.read_csv(csv_path)
@@ -439,11 +515,24 @@ def calculate_subtotal(solution):
                 component.product_model = product_model
                 quantity = component.quantity
                 valid_quantity = validate_quantity(quantity, inventory)
+                if valid_quantity == 0:
+                    logger.warning(f"Invalid quantity ({valid_quantity}) for component {component.no}. Searching for alternatives online.")
+                    alternative_component = search_for_product_details(product_model, description)
+                    if alternative_component:
+                        component.description = alternative_component.description
+                        component.unit_price = alternative_component.price
+                        valid_quantity = alternative_component.available_quantity
+                        logger.info(f"Alternative component found: {alternative_component}")
+                    else:
+                        component.gross_price = unit_price * component.quantity
+                        subtotal += component.gross_price
+                        logger.warning(f"No alternative found for component {component.no}. Skipping this component.")
+                        continue
                 component.quantity = valid_quantity
                 component.gross_price = unit_price * component.quantity
                 subtotal += component.gross_price
             else:
-                print(f"Warning: Unable to calculate price for component {component.no}")
+                logger.warning(f"Unable to calculate price for component {component.no}")
     
     return subtotal
 
@@ -455,3 +544,52 @@ def add_pricing_information(quotation: PowerBackupOptions):
         option.vat = option.subtotal * 0.16
         option.grand_total = option.subtotal + option.vat
     return quotation
+
+
+def search_for_product_details(product_model, description):
+    """
+    Use the search tool to find product details based on the product model and description.
+    """
+    cleaned_description = description.replace("DAYLIFF ", "").replace("Dayliff ", "")
+    query_str = f"""
+    Find a suitable alternative component to replace an unavailable Dayliff product with the following characteristics:
+    - Original product name: {product_model}
+    - Original description: {cleaned_description}
+    Source the alternative from legit and most trusted online suppliers within Kenya.
+
+    For the alternative component, provide:
+    1. Unit price in KES (Kenyan Shillings)
+    2. Available quantity in stock
+    3. Description
+
+    Note: The original Dayliff product is not available in the Davis & Shirtliff ERP system.
+    """
+    try:
+        results = agent_executor.run({"input": query_str}, return_only_outputs=True,)
+        if isinstance(results, dict) and 'output' in results:
+            output = results['output']
+            if isinstance(output, dict) and all(key in output for key in ['description', 'price', 'available_quantity']):
+                return Response(
+                    description=output['description'],
+                    price=float(output['price']),
+                    available_quantity=int(output['available_quantity'])
+                )
+            else:
+                logger.error(f"Unexpected output format from agent_executor: {output}")
+        else:
+            logger.error(f"Unexpected results format from agent_executor: {results}")
+    except Exception as e:
+        print(f"Error fetching product details online: {e}")
+    return None
+
+def extract_product_details(results: str) -> tuple[Optional[str], Optional[float], Optional[int]]:
+    """Extract the product description, unit price, and available quantity from the search results."""
+    description_match = re.search(r"- Description:\s*(.+)", results)
+    price_match = re.search(r"- Price:\s*Kshs\.?\s*(\d+(?:,\d+)?)", results)
+    quantity_match = re.search(r"- Available Quantity:\s*(\d+)", results)
+    
+    description = description_match.group(1) if description_match else None
+    price = float(price_match.group(1).replace(",", "")) if price_match else None
+    available_quantity = int(quantity_match.group(1)) if quantity_match else None
+    logger.debug(f"Extracted product details: Description: {description}, Price: {price}, Quantity: {available_quantity}")
+    return description, price, available_quantity
