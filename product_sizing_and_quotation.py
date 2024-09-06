@@ -116,7 +116,7 @@ agent = (
     | parse
 )
 
-agent_executor = AgentExecutor(tools=tools, agent=agent, verbose=True)
+agent_executor = AgentExecutor(tools=tools, agent=agent, verbose=True, max_iterations=3)
 
 csv_path = os.path.join(os.path.dirname(__file__), "solar_items.csv")
 df = pd.read_csv(csv_path)
