@@ -486,12 +486,18 @@ def generate_powerbackup_quotation(
             logger.debug(f"Final quotation with pricing: {final_quotation}")
             return final_quotation
         elif conversation_level == "Further_Engagement":
-            query_str = customer_request
+            query_str = f"Refine the previous quotation based on the following customer request: {customer_request}. Ensure that the Dayliff components meet their expectations."
             output = rag_chain.invoke(query_str)
+            logger.debug(f"RAG chain output: {output}")
             memory.save_context({"input": query_str}, {"output": output})
             new_parser = OutputFixingParser.from_llm(parser=output_parser, llm=llm)
             quotation = new_parser.parse(output)
-            return add_pricing_information(quotation)
+            logger.debug(f"Parsed quotation: {quotation}")
+            if quotation is None:
+                raise ValueError("Quotation parsing resulted in None")
+            final_quotation = add_pricing_information(quotation)
+            logger.debug(f"Final quotation with pricing: {final_quotation}")
+            return final_quotation
     except Exception as e:
         logger.exception(f"Error in generate_powerbackup_quotation: {str(e)}")
         raise
