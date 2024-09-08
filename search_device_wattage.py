@@ -93,7 +93,7 @@ agent = (
     | parse
 )
 
-agent_executor = AgentExecutor(tools=tools, agent=agent, verbose=True, max_iterations=3)
+agent_executor = AgentExecutor(tools=tools, agent=agent, max_iterations=2)
 
 def get_item_device_wattage(item_name: str, item_model_name: str) -> int:
     """

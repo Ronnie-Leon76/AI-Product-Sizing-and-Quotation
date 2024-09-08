@@ -1,5 +1,5 @@
 import os, sys
-import logging
+#import logging
 import json
 from typing import List, Optional, Literal
 import gc, re
@@ -37,8 +37,8 @@ from dotenv import load_dotenv, find_dotenv
 
 _ = load_dotenv(find_dotenv())
 
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+#logging.basicConfig(level=logging.DEBUG)
+#logger = logging.getLogger(__name__)
 
 openai.api_key = os.environ["OPENAI_API_KEY"]
 serper_api_key = os.getenv("SERPER_API_KEY")
@@ -116,7 +116,7 @@ agent = (
     | parse
 )
 
-agent_executor = AgentExecutor(tools=tools, agent=agent, verbose=True, max_iterations=3)
+agent_executor = AgentExecutor(tools=tools, agent=agent, max_iterations=2)
 
 csv_path = os.path.join(os.path.dirname(__file__), "solar_items.csv")
 df = pd.read_csv(csv_path)
@@ -190,7 +190,7 @@ def fetch_item_details(no: str, username: str = API_USERNAME, password: str = AP
 def validate_quantity(requested_quantity: int, available_inventory: int) -> int:
     """Ensure the requested quantity does not exceed the available inventory."""
     if requested_quantity > available_inventory:
-        print(f"Warning: Requested quantity ({requested_quantity}) exceeds available inventory ({available_inventory}). Adjusting quantity to available inventory.")
+        #print(f"Warning: Requested quantity ({requested_quantity}) exceeds available inventory ({available_inventory}). Adjusting quantity to available inventory.")
         return available_inventory
     return requested_quantity
 
@@ -473,33 +473,33 @@ def generate_powerbackup_quotation(
 
         if conversation_level == "First_Quotation":
             query_str = f"Provide a comprehensive analysis and quotation for the three most suitable Dayliff power backup solutions to support an energy demand of {energy_demand} Watt-hours per day{location_clause}."
-            logger.debug(f"Query string: {query_str}")
+            #logger.debug(f"Query string: {query_str}")
             output = rag_chain.invoke(query_str)
-            logger.debug(f"RAG chain output: {output}")
+            #logger.debug(f"RAG chain output: {output}")
             memory.save_context({"input": query_str}, {"output": output})
             new_parser = OutputFixingParser.from_llm(parser=output_parser, llm=llm)
             quotation = new_parser.parse(output)
-            logger.debug(f"Parsed quotation: {quotation}")
+            #logger.debug(f"Parsed quotation: {quotation}")
             if quotation is None:
                 raise ValueError("Quotation parsing resulted in None")
             final_quotation = add_pricing_information(quotation)
-            logger.debug(f"Final quotation with pricing: {final_quotation}")
+            #logger.debug(f"Final quotation with pricing: {final_quotation}")
             return final_quotation
         elif conversation_level == "Further_Engagement":
             query_str = f"Refine the previous quotation based on the following customer request: {customer_request}. Ensure that the Dayliff components meet their expectations."
             output = rag_chain.invoke(query_str)
-            logger.debug(f"RAG chain output: {output}")
+            #logger.debug(f"RAG chain output: {output}")
             memory.save_context({"input": query_str}, {"output": output})
             new_parser = OutputFixingParser.from_llm(parser=output_parser, llm=llm)
             quotation = new_parser.parse(output)
-            logger.debug(f"Parsed quotation: {quotation}")
+            #logger.debug(f"Parsed quotation: {quotation}")
             if quotation is None:
                 raise ValueError("Quotation parsing resulted in None")
             final_quotation = add_pricing_information(quotation)
-            logger.debug(f"Final quotation with pricing: {final_quotation}")
+            #logger.debug(f"Final quotation with pricing: {final_quotation}")
             return final_quotation
     except Exception as e:
-        logger.exception(f"Error in generate_powerbackup_quotation: {str(e)}")
+        #logger.exception(f"Error in generate_powerbackup_quotation: {str(e)}")
         raise
 
 def calculate_subtotal(solution):
@@ -522,23 +522,24 @@ def calculate_subtotal(solution):
                 quantity = component.quantity
                 valid_quantity = validate_quantity(quantity, inventory)
                 if valid_quantity == 0:
-                    logger.warning(f"Invalid quantity ({valid_quantity}) for component {component.no}. Searching for alternatives online.")
+                    #logger.warning(f"Invalid quantity ({valid_quantity}) for component {component.no}. Searching for alternatives online.")
                     alternative_component = search_for_product_details(product_model, description)
                     if alternative_component:
                         component.description = alternative_component.description
                         component.unit_price = alternative_component.price
                         valid_quantity = alternative_component.available_quantity
-                        logger.info(f"Alternative component found: {alternative_component}")
+                        #logger.info(f"Alternative component found: {alternative_component}")
                     else:
                         component.gross_price = unit_price * component.quantity
                         subtotal += component.gross_price
-                        logger.warning(f"No alternative found for component {component.no}. Skipping this component.")
+                        #logger.warning(f"No alternative found for component {component.no}. Skipping this component.")
                         continue
                 component.quantity = valid_quantity
                 component.gross_price = unit_price * component.quantity
                 subtotal += component.gross_price
             else:
-                logger.warning(f"Unable to calculate price for component {component.no}")
+                #logger.warning(f"Unable to calculate price for component {component.no}")
+                pass
     
     return subtotal
 
@@ -581,9 +582,11 @@ def search_for_product_details(product_model, description):
                     available_quantity=int(output['available_quantity'])
                 )
             else:
-                logger.error(f"Unexpected output format from agent_executor: {output}")
+                #logger.error(f"Unexpected output format from agent_executor: {output}")
+                pass
         else:
-            logger.error(f"Unexpected results format from agent_executor: {results}")
+            #logger.error(f"Unexpected results format from agent_executor: {results}")
+            pass
     except Exception as e:
         print(f"Error fetching product details online: {e}")
     return None
@@ -597,5 +600,5 @@ def extract_product_details(results: str) -> tuple[Optional[str], Optional[float
     description = description_match.group(1) if description_match else None
     price = float(price_match.group(1).replace(",", "")) if price_match else None
     available_quantity = int(quantity_match.group(1)) if quantity_match else None
-    logger.debug(f"Extracted product details: Description: {description}, Price: {price}, Quantity: {available_quantity}")
+    #logger.debug(f"Extracted product details: Description: {description}, Price: {price}, Quantity: {available_quantity}")
     return description, price, available_quantity
