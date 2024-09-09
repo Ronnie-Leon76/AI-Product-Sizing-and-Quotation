@@ -2,6 +2,7 @@ import os
 import re
 import json
 import datetime
+import requests
 import openai
 from dotenv import load_dotenv, find_dotenv
 from langchain_core.pydantic_v1 import BaseModel, Field
@@ -12,6 +13,8 @@ from langchain.agents import initialize_agent, Tool, AgentType, AgentExecutor
 from langchain.agents.format_scratchpad import format_to_openai_function_messages
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.utils.function_calling import convert_to_openai_function
+from langchain.schema.output_parser import OutputParserException
+from langchain.tools import StructuredTool
 
 # Load environment variables
 load_dotenv(find_dotenv())
@@ -25,7 +28,7 @@ if not serper_api_key:
 POWER_RATING_JSON_FILE_PATH = "device_power_rating.json"
 DEFAULT_WATTAGE = 200  # New constant for default wattage
 
-class Response(BaseModel):
+class WattageResponse(BaseModel):
     """
     Final response to the question being asked
     """
@@ -47,38 +50,59 @@ prompt = ChatPromptTemplate.from_messages(
 # Initialize models and tools
 llm = ChatOpenAI(temperature=0.1, model_name="gpt-4o-mini")
 search = GoogleSerperAPIWrapper()
+
+
+def fallback_search(query: str) -> str:
+    """Perform a fallback search using a simple web request."""
+    try:
+        response = requests.get(f"https://www.google.com/search?q={query}")
+        return response.text
+    except Exception as e:
+        return f"Error performing fallback search: {str(e)}"
+
+def google_search(query: str, tags: list = None, max_concurrency: int = 1) -> str:
+    """Perform a Google search with fallback."""
+    try:
+        result = search.run(query)
+        if not result:
+            print("No results from GoogleSerperAPIWrapper, using fallback search.")
+            return fallback_search(query)
+        return result
+    except Exception as e:
+        print(f"Error with GoogleSerperAPIWrapper: {str(e)}. Using fallback search.")
+        return fallback_search(query)
+
 tools = [
-    Tool(
-        name="Google Search",
-        func=search.run,
+    StructuredTool.from_function(
+        func=google_search,
+        name="Google_Search",
         description="Useful for when you need to answer questions about current events or the current state of the world. Use this to search for specific information online."
     )
 ]
 
 
-response_tool = convert_to_openai_function(Response)
-llm_with_tools = llm.bind_functions(tools + [response_tool])
+wattage_response_tool = convert_to_openai_function(WattageResponse)
+llm_with_tools = llm.bind_functions(tools + [wattage_response_tool])
 # agent = initialize_agent(tools, llm, agent=AgentType.SELF_ASK_WITH_SEARCH, verbose=True)
 
 
 def parse(output):
-    # If no function was invoked, return to user
-    if "function_call" not in output.additional_kwargs:
-        return AgentFinish(return_values={"output": output.content}, log=output.content)
+    try:
+        if "function_call" not in output.additional_kwargs:
+            return AgentFinish(return_values={"output": output.content}, log=output.content)
 
-    # Parse out the function call
-    function_call = output.additional_kwargs["function_call"]
-    name = function_call["name"]
-    inputs = json.loads(function_call["arguments"])
+        function_call = output.additional_kwargs["function_call"]
+        name = function_call["name"]
+        inputs = json.loads(function_call["arguments"])
 
-    # If the Response function was invoked, return to the user with the function inputs
-    if name == "Response":
-        return AgentFinish(return_values=inputs, log=str(function_call))
-    # Otherwise, return an agent action
-    else:
-        return AgentActionMessageLog(
-            tool=name, tool_input=inputs, log="", message_log=[output]
-        )
+        if name == "WattageResponse":
+            return AgentFinish(return_values=inputs, log=str(function_call))
+        else:
+            return AgentActionMessageLog(
+                tool=name, tool_input=inputs, log="", message_log=[output]
+            )
+    except Exception as e:
+        raise OutputParserException(f"Error parsing output: {str(e)}")
 
 agent = (
     {
@@ -93,7 +117,7 @@ agent = (
     | parse
 )
 
-agent_executor = AgentExecutor(tools=tools, agent=agent, max_iterations=2)
+agent_executor = AgentExecutor(tools=tools, agent=agent, verbose=True, max_iterations=4)
 
 def get_item_device_wattage(item_name: str, item_model_name: str) -> int:
     """
@@ -120,7 +144,7 @@ def get_item_device_wattage(item_name: str, item_model_name: str) -> int:
     if wattage is not None:
         return wattage
     
-    query_str = f"What is the average power consumption in watts for a {item_model_name} {item_name}? Please provide a single numeric value if possible."
+    query_str = f"What is the average power consumption in watts for a {item_model_name} {item_name}?"
     try:
         results = agent_executor.invoke({"input": query_str})
         wattage = results.get("wattage")
