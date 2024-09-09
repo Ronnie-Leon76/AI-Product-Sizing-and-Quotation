@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from langchain.memory import ConversationBufferMemory
 from search_device_wattage import get_item_device_wattage
-from product_sizing_and_quotation import generate_powerbackup_quotation, PowerBackupOptions, SolarPowerSolution, InverterPowerSolution, BatteryOption, SolarPanelOption, InverterOption, Component
+from product_sizing_and_quotation import generate_powerbackup_quotation, PowerBackupOptions, SolarPowerSolution, InverterPowerSolution, BatteryOption, SolarPanelOption, InverterOption, Component, FilteredPowerBackupOptions
 
 # File paths
 CLIENT_COMPLETE_ITEMS_INFORMATION_LIST_JSON_FILE_PATH = "client_complete_items_information_list.json"
@@ -120,6 +120,17 @@ def format_component(component: Component) -> Dict[str, Any]:
         "unit_price": component.unit_price,
         "gross_price": component.gross_price
     }
+
+def format_filtered_power_backup_options(quotation: FilteredPowerBackupOptions) -> Dict[str, Any]:
+    formatted_options = {}
+    if quotation.option1:
+        formatted_options["option1"] = format_solar_power_solution(quotation.option1)
+    if quotation.option2:
+        formatted_options["option2"] = format_solar_power_solution(quotation.option2)
+    if quotation.option3:
+        formatted_options["option3"] = format_inverter_power_solution(quotation.option3)
+    
+    return formatted_options
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -266,8 +277,8 @@ async def refine_quotation_chat(refinement_query: str) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail="Quotation generation returned no result.")
 
     # Format quotation
-    if isinstance(quotation, PowerBackupOptions):
-        formatted_quotation = format_power_backup_options(quotation)
+    if isinstance(quotation, FilteredPowerBackupOptions):
+        formatted_quotation = format_filtered_power_backup_options(quotation)
     elif isinstance(quotation, dict):
         formatted_quotation = quotation  # Assuming it's already formatted
     else:

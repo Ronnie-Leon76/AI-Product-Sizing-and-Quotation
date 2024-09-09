@@ -26,6 +26,8 @@ from langchain.agents import initialize_agent, Tool, AgentType, AgentExecutor
 from langchain.agents.format_scratchpad import format_to_openai_function_messages
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.utils.function_calling import convert_to_openai_function
+from langchain.schema.output_parser import OutputParserException
+from langchain.tools import StructuredTool
 from Ingestion.ingest import (
     extract_text_and_metadata_from_pdf_document,
     extract_text_and_metadata_from_csv_document,
@@ -53,7 +55,7 @@ DIR_PATH = "SOLAR_EQUIPMENT_AND_ACCESSORIES"
 if not serper_api_key:
     raise ValueError("Please set the environment variable SERPER_API_KEY")
 
-class Response(BaseModel_):
+class AlternativeComponentResponse(BaseModel_):
     """
     Final response to the question being asked
     """
@@ -71,36 +73,59 @@ prompt = ChatPromptTemplate.from_messages(
 
 llm = ChatOpenAI(temperature=0.1, model_name="gpt-4o-mini")
 search = GoogleSerperAPIWrapper()
+
+
+def fallback_search(query: str) -> str:
+    """Perform a fallback search using a simple web request."""
+    try:
+        response = requests.get(f"https://www.google.com/search?q={query}")
+        return response.text
+    except Exception as e:
+        return f"Error performing fallback search: {str(e)}"
+
+def google_search(query: str, tags: list = None, max_concurrency: int = 1) -> str:
+    """Perform a Google search with fallback."""
+    try:
+        result = search.run(query)
+        if not result:
+            print("No results from GoogleSerperAPIWrapper, using fallback search.")
+            return fallback_search(query)
+        return result
+    except Exception as e:
+        print(f"Error with GoogleSerperAPIWrapper: {str(e)}. Using fallback search.")
+        return fallback_search(query)
+
 tools = [
-    Tool(
-        name="Google Search",
-        func=search.run,
+    StructuredTool.from_function(
+        func=google_search,
+        name="Google_Search",
         description="Useful for when you need to answer questions about current events or the current state of the world. Use this to search for specific information online."
     )
 ]
 
-response_tool = convert_to_openai_function(Response)
-llm_with_tools = llm.bind_functions(tools + [response_tool])
-# agent = initialize_agent(tools, llm, agent=AgentType.SELF_ASK_WITH_SEARCH)
+
+alternative_component_response_tool = convert_to_openai_function(AlternativeComponentResponse)
+llm_with_tools = llm.bind_functions(tools + [alternative_component_response_tool])
+# agent = initialize_agent(tools, llm, agent=AgentType.SELF_ASK_WITH_SEARCH, verbose=True)
+
 
 def parse(output):
-    # If no function was invoked, return to user
-    if "function_call" not in output.additional_kwargs:
-        return AgentFinish(return_values={"output": output.content}, log=output.content)
+    try:
+        if "function_call" not in output.additional_kwargs:
+            return AgentFinish(return_values={"output": output.content}, log=output.content)
 
-    # Parse out the function call
-    function_call = output.additional_kwargs["function_call"]
-    name = function_call["name"]
-    inputs = json.loads(function_call["arguments"])
+        function_call = output.additional_kwargs["function_call"]
+        name = function_call["name"]
+        inputs = json.loads(function_call["arguments"])
 
-    # If the Response function was invoked, return to the user with the function inputs
-    if name == "Response":
-        return AgentFinish(return_values=inputs, log=str(function_call))
-    # Otherwise, return an agent action
-    else:
-        return AgentActionMessageLog(
-            tool=name, tool_input=inputs, log="", message_log=[output]
-        )
+        if name == "AlternativeComponentResponse":
+            return AgentFinish(return_values=inputs, log=str(function_call))
+        else:
+            return AgentActionMessageLog(
+                tool=name, tool_input=inputs, log="", message_log=[output]
+            )
+    except Exception as e:
+        raise OutputParserException(f"Error parsing output: {str(e)}")
 
 
 agent = (
@@ -116,7 +141,7 @@ agent = (
     | parse
 )
 
-agent_executor = AgentExecutor(tools=tools, agent=agent, max_iterations=2)
+agent_executor = AgentExecutor(tools=tools, agent=agent, max_iterations=4)
 
 csv_path = os.path.join(os.path.dirname(__file__), "solar_items.csv")
 df = pd.read_csv(csv_path)
@@ -297,6 +322,19 @@ class PowerBackupOptions(BaseModel):
     )
 
 
+class FilteredPowerBackupOptions(BaseModel):
+    option1: Optional[SolarPowerSolution] = Field(
+        None, description="Solar Power Backup Solution with Lead Acid Batteries"
+    )
+    option2: Optional[SolarPowerSolution] = Field(
+        None, description="Solar Power Backup Solution with Lithium-Ion Batteries"
+    )
+    option3: Optional[InverterPowerSolution] = Field(
+        None, description="Inverter Power Backup Solution"
+    )
+
+
+
 if not os.path.exists(DIR_PATH):
     print(f"Documents Directory path {DIR_PATH} does not exist")
     sys.exit(1)
@@ -325,6 +363,36 @@ def load_bm25_retriever():
     with open("bm25_retriever.pkl", "rb") as f:
         bm25_retriever = pickle.load(f)
     return bm25_retriever
+
+
+def filter_quotation_by_request(final_quotation: PowerBackupOptions, customer_request: str) -> FilteredPowerBackupOptions:
+    """
+    Filter the final quotation based on the customer's specific request.
+    
+    :param final_quotation: The complete PowerBackupOptions object containing all quotation options
+    :param customer_request: The customer's specific request as a string
+    :return: A PowerBackupOptions object containing only the requested options
+    """
+    request = customer_request.lower()
+
+    # Check for lithium-ion battery request
+    if "lithium" in request and "lead" not in request and "inverter" not in request:
+        return FilteredPowerBackupOptions(option1=None, option2=final_quotation.option2, option3=None)
+    
+    # Check for lead-acid battery request
+    elif "lead" in request and "lithium" not in request and "inverter" not in request:
+        return FilteredPowerBackupOptions(option1=final_quotation.option1, option2=None, option3=None)
+    
+    # Check for inverter-based solution request
+    elif "inverter" in request and "lithium" not in request and "lead" not in request:
+        return FilteredPowerBackupOptions(option1=None, option2=None, option3=final_quotation.option3)
+    
+    # Check for solar options (both lead-acid and lithium-ion)
+    elif "solar" in request and "inverter" not in request:
+        return FilteredPowerBackupOptions(option1=final_quotation.option1, option2=final_quotation.option2, option3=None)
+    else:
+        return final_quotation
+
 
 
 def generate_powerbackup_quotation(
@@ -497,7 +565,8 @@ def generate_powerbackup_quotation(
                 raise ValueError("Quotation parsing resulted in None")
             final_quotation = add_pricing_information(quotation)
             #logger.debug(f"Final quotation with pricing: {final_quotation}")
-            return final_quotation
+            filtered_quotation = filter_quotation_by_request(final_quotation, customer_request)
+            return filtered_quotation
     except Exception as e:
         #logger.exception(f"Error in generate_powerbackup_quotation: {str(e)}")
         raise
@@ -524,10 +593,12 @@ def calculate_subtotal(solution):
                 if valid_quantity == 0:
                     #logger.warning(f"Invalid quantity ({valid_quantity}) for component {component.no}. Searching for alternatives online.")
                     alternative_component = search_for_product_details(product_model, description)
+                    #print(f"Alternative component: {alternative_component}")
                     if alternative_component:
-                        component.description = alternative_component.description
-                        component.unit_price = alternative_component.price
-                        valid_quantity = alternative_component.available_quantity
+                        component.description = alternative_component["description"]
+                        component.unit_price = alternative_component["price"]
+                        valid_quantity = alternative_component["available_quantity"]
+                        #print(f"Alternative component found: {alternative_component}")
                         #logger.info(f"Alternative component found: {alternative_component}")
                     else:
                         component.gross_price = unit_price * component.quantity
@@ -572,21 +643,13 @@ def search_for_product_details(product_model, description):
     Note: The original Dayliff product is not available in the Davis & Shirtliff ERP system.
     """
     try:
-        results = agent_executor.run({"input": query_str}, return_only_outputs=True,)
-        if isinstance(results, dict) and 'output' in results:
-            output = results['output']
-            if isinstance(output, dict) and all(key in output for key in ['description', 'price', 'available_quantity']):
-                return Response(
-                    description=output['description'],
-                    price=float(output['price']),
-                    available_quantity=int(output['available_quantity'])
-                )
-            else:
-                #logger.error(f"Unexpected output format from agent_executor: {output}")
-                pass
-        else:
-            #logger.error(f"Unexpected results format from agent_executor: {results}")
-            pass
+        results = agent_executor.invoke({"input": query_str}, return_only_outputs=True,)
+        #print(f"Results: {results}")
+        return {
+            "description": results["description"],
+            "price": results["price"],
+            "available_quantity": results["available_quantity"]
+        }
     except Exception as e:
         print(f"Error fetching product details online: {e}")
     return None
