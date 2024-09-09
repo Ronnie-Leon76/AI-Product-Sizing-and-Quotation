@@ -601,8 +601,6 @@ def calculate_subtotal(solution):
                         #print(f"Alternative component found: {alternative_component}")
                         #logger.info(f"Alternative component found: {alternative_component}")
                     else:
-                        component.gross_price = unit_price * component.quantity
-                        subtotal += component.gross_price
                         #logger.warning(f"No alternative found for component {component.no}. Skipping this component.")
                         continue
                 component.quantity = valid_quantity
