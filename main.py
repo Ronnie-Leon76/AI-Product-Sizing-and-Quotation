@@ -30,6 +30,7 @@ from dotenv import load_dotenv, find_dotenv
 _ = load_dotenv(find_dotenv())
 
 REDIS_URL = os.getenv("REDIS_URL")
+CACHE_TTL = 432000
 
 origins = ["*"]
 
@@ -41,8 +42,8 @@ def get_cache_key(items, location):
     key_str = json.dumps([item.dict() for item in items] + [location])
     return hashlib.md5(key_str.encode()).hexdigest()
 
-def cache_result(key, value, expiry=1800):
-    redis_client.setex(key, expiry, json.dumps(value))
+def cache_result(key, value):
+    redis_client.setex(key, CACHE_TTL, json.dumps(value))
 
 def get_cached_result(key):
     result = redis_client.get(key)
