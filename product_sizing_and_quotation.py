@@ -365,33 +365,58 @@ def load_bm25_retriever():
     return bm25_retriever
 
 
-def filter_quotation_by_request(final_quotation: PowerBackupOptions, customer_request: str) -> FilteredPowerBackupOptions:
+def analyze_customer_request(request: str) -> dict:
+    """Analyze the customer's request to determine their preferences."""
+    preferences = {
+        "battery_type": None,
+        "solution_type": None,
+        "specific_components": [],
+        "budget_constraint": None,
+        "capacity_requirement": None,
+    }
+    
+    request_lower = request.lower()
+    
+    if "lithium" in request_lower and "lead" not in request_lower and "inverter" not in request_lower:
+        preferences["battery_type"] = "lithium-ion"
+    elif "lead" in request_lower and "lithium" not in request_lower and "inverter" not in request_lower:
+        preferences["battery_type"] = "lead-acid"
+    elif "inverter" in request_lower and "lithium" not in request_lower and "lead" not in request_lower:
+        preferences["solution_type"] = "inverter"
+    elif "solar" in request_lower and "inverter" not in request_lower:
+        preferences["solution_type"] = "solar"
+    return preferences
+
+
+def filter_quotation_by_request(final_quotation: PowerBackupOptions, preferences: dict) -> FilteredPowerBackupOptions:
     """
-    Filter the final quotation based on the customer's specific request.
+    Filter the final quotation based on the analyzed customer preferences.
     
     :param final_quotation: The complete PowerBackupOptions object containing all quotation options
-    :param customer_request: The customer's specific request as a string
-    :return: A PowerBackupOptions object containing only the requested options
+    :param preferences: A dictionary of customer preferences (e.g., solution_type, battery_type)
+    :return: A FilteredPowerBackupOptions object containing only the requested options
     """
-    request = customer_request.lower()
+    filtered_quotation = FilteredPowerBackupOptions()
+    
+    solution_type = preferences.get("solution_type")
+    battery_type = preferences.get("battery_type")
 
-    # Check for lithium-ion battery request
-    if "lithium" in request and "lead" not in request and "inverter" not in request:
-        return FilteredPowerBackupOptions(option1=None, option2=final_quotation.option2, option3=None)
+    if battery_type == "lead-acid":
+        filtered_quotation.option1 = final_quotation.option1
+    if battery_type == "lithium-ion":
+        filtered_quotation.option2 = final_quotation.option2
+    if solution_type == "inverter":
+        filtered_quotation.option3 = final_quotation.option3
     
-    # Check for lead-acid battery request
-    elif "lead" in request and "lithium" not in request and "inverter" not in request:
-        return FilteredPowerBackupOptions(option1=final_quotation.option1, option2=None, option3=None)
+    # If no options were selected, return all options
+    if not any([filtered_quotation.option1, filtered_quotation.option2, filtered_quotation.option3]):
+        return FilteredPowerBackupOptions(
+            option1=final_quotation.option1,
+            option2=final_quotation.option2,
+            option3=final_quotation.option3
+        )
     
-    # Check for inverter-based solution request
-    elif "inverter" in request and "lithium" not in request and "lead" not in request:
-        return FilteredPowerBackupOptions(option1=None, option2=None, option3=final_quotation.option3)
-    
-    # Check for solar options (both lead-acid and lithium-ion)
-    elif "solar" in request and "inverter" not in request:
-        return FilteredPowerBackupOptions(option1=final_quotation.option1, option2=final_quotation.option2, option3=None)
-    else:
-        return final_quotation
+    return filtered_quotation
 
 
 
@@ -554,7 +579,19 @@ def generate_powerbackup_quotation(
             #logger.debug(f"Final quotation with pricing: {final_quotation}")
             return final_quotation
         elif conversation_level == "Further_Engagement":
-            query_str = f"Refine the previous quotation based on the following customer request: {customer_request}. Ensure that the Dayliff components meet their expectations."
+            customer_preferences = analyze_customer_request(customer_request)
+            query_str = f"""
+            Refine the previous quotation based on the following customer preferences:
+            Battery Type: {customer_preferences['battery_type']}
+            Solution Type: {customer_preferences['solution_type']}
+            Specific Components: {', '.join(customer_preferences['specific_components'])}
+            Budget Constraint: {customer_preferences['budget_constraint']}
+            Capacity Requirement: {customer_preferences['capacity_requirement']}
+            
+            Original request: {customer_request}
+            
+            Ensure that the Dayliff components meet these preferences while still providing the most suitable solution.
+            """
             output = rag_chain.invoke(query_str)
             #logger.debug(f"RAG chain output: {output}")
             memory.save_context({"input": query_str}, {"output": output})
@@ -565,11 +602,12 @@ def generate_powerbackup_quotation(
                 raise ValueError("Quotation parsing resulted in None")
             final_quotation = add_pricing_information(quotation)
             #logger.debug(f"Final quotation with pricing: {final_quotation}")
-            filtered_quotation = filter_quotation_by_request(final_quotation, customer_request)
+            filtered_quotation = filter_quotation_by_request(final_quotation, customer_preferences)
             return filtered_quotation
     except Exception as e:
         #logger.exception(f"Error in generate_powerbackup_quotation: {str(e)}")
-        raise
+        print(f"Error in generate_powerbackup_quotation: {str(e)}")
+        raise ValueError(f"Failed to generate refined quotation: {str(e)}")
 
 def calculate_subtotal(solution):
     """Calculate the subtotal for a power solution, accounting for different types of solutions."""

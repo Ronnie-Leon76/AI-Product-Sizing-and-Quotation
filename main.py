@@ -1,9 +1,11 @@
-import os
+import os, sys
 import json
 import gc
+import hashlib
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 import uvicorn
+import redis
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
@@ -22,10 +24,31 @@ if not os.path.exists(solar_equipment_directory_path):
     raise ValueError(f"The directory {solar_equipment_directory_path} does not exist. Please ensure it's created and contains the necessary files.")
 
 
+sys.path.append("../..")
+from dotenv import load_dotenv, find_dotenv
+
+_ = load_dotenv(find_dotenv())
+
+REDIS_URL = os.getenv("REDIS_URL")
+
 origins = ["*"]
 
 memory = ConversationBufferMemory()
 
+redis_client = redis.StrictRedis.from_url(REDIS_URL)
+
+def get_cache_key(items, location):
+    key_str = json.dumps([item.dict() for item in items] + [location])
+    return hashlib.md5(key_str.encode()).hexdigest()
+
+def cache_result(key, value, expiry=1800):
+    redis_client.setex(key, expiry, json.dumps(value))
+
+def get_cached_result(key):
+    result = redis_client.get(key)
+    if result:
+        return json.loads(result)
+    return None
 
 # Pydantic models
 class Item(BaseModel):
@@ -129,7 +152,6 @@ def format_filtered_power_backup_options(quotation: FilteredPowerBackupOptions) 
         formatted_options["option2"] = format_solar_power_solution(quotation.option2)
     if quotation.option3:
         formatted_options["option3"] = format_inverter_power_solution(quotation.option3)
-    
     return formatted_options
 
 # Initialize FastAPI app
@@ -158,6 +180,12 @@ async def process_items(items: List[Item]) -> Dict[str, Any]:
     complete_item_information = []
     total_energy_demand = 0.0
     location = items[0].location
+    cache_key = get_cache_key(items, location)
+
+    # Check Redis cache for result
+    cached_result = get_cached_result(cache_key)
+    if cached_result:
+        return cached_result
 
     # Process each item
     item_responses = []
@@ -259,6 +287,9 @@ async def process_items(items: List[Item]) -> Dict[str, Any]:
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save quotation: {e}")
 
+    # Cache the result in Redis
+    cache_result(cache_key, formatted_quotation)
+
     return formatted_quotation
 
 
@@ -267,6 +298,13 @@ async def refine_quotation_chat(refinement_query: str) -> Dict[str, Any]:
     """
     Refine the current quotation based on client input.
     """
+    cache_key = hashlib.md5(refinement_query.encode()).hexdigest()
+
+    # Check Redis cache for result
+    cached_result = get_cached_result(cache_key)
+    if cached_result:
+        return cached_result
+    
     # Regenerate the quotation based on the refined input
     try:
         quotation = generate_powerbackup_quotation(conversation_level = "Further_Engagement", memory=memory, customer_request=refinement_query)
@@ -279,10 +317,12 @@ async def refine_quotation_chat(refinement_query: str) -> Dict[str, Any]:
     # Format quotation
     if isinstance(quotation, FilteredPowerBackupOptions):
         formatted_quotation = format_filtered_power_backup_options(quotation)
+    elif isinstance(quotation, PowerBackupOptions):
+        formatted_quotation = format_power_backup_options(quotation)
     elif isinstance(quotation, dict):
         formatted_quotation = quotation  # Assuming it's already formatted
     else:
-        raise HTTPException(status_code=500, detail="Unexpected quotation format.")
+        raise HTTPException(status_code=500, detail=f"Unexpected quotation format: {type(quotation)}")
 
     # Save formatted quotation to JSON
     try:
@@ -290,6 +330,9 @@ async def refine_quotation_chat(refinement_query: str) -> Dict[str, Any]:
             json.dump(formatted_quotation, f, indent=4)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save quotation: {e}")
+    
+    # Cache the result in Redis
+    cache_result(cache_key, formatted_quotation)
 
     return formatted_quotation
 
