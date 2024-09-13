@@ -535,6 +535,10 @@ def generate_powerbackup_quotation(
             - Detailed description (ensure it matches exactly with the provided item descriptions)
             - Required quantity
 
+            For each option, ensure the following:
+            - The total battery capacity (number_of_batteries * battery_voltage * battery_capacity) must match the inverter rating multiplied by the expected power consumption.
+            - If the battery capacity does not match, suggest adjusting the battery quantity or inverter capacity.
+
             When specifying components, always use the exact No. and Description pairs from the list provided above.
             Do not include unit prices, gross prices, or VAT calculations in your response. These will be handled separately.
             Ensure the output conforms to the specified format.
@@ -626,22 +630,22 @@ def calculate_subtotal(solution):
                 component.description = description
                 component.item_category_code = item_category_code
                 component.product_model = product_model
-                quantity = component.quantity
-                valid_quantity = validate_quantity(quantity, inventory)
-                if valid_quantity == 0:
-                    #logger.warning(f"Invalid quantity ({valid_quantity}) for component {component.no}. Searching for alternatives online.")
-                    alternative_component = search_for_product_details(product_model, description)
-                    #print(f"Alternative component: {alternative_component}")
-                    if alternative_component:
-                        component.description = alternative_component["description"]
-                        component.unit_price = alternative_component["price"]
-                        valid_quantity = alternative_component["available_quantity"]
-                        #print(f"Alternative component found: {alternative_component}")
-                        #logger.info(f"Alternative component found: {alternative_component}")
-                    else:
-                        #logger.warning(f"No alternative found for component {component.no}. Skipping this component.")
-                        continue
-                component.quantity = valid_quantity
+                # quantity = component.quantity
+                # valid_quantity = validate_quantity(quantity, inventory)
+                # if valid_quantity == 0:
+                #     #logger.warning(f"Invalid quantity ({valid_quantity}) for component {component.no}. Searching for alternatives online.")
+                #     alternative_component = search_for_product_details(product_model, description)
+                #     #print(f"Alternative component: {alternative_component}")
+                #     if alternative_component:
+                #         component.description = alternative_component["description"]
+                #         component.unit_price = alternative_component["price"]
+                #         valid_quantity = alternative_component["available_quantity"]
+                #         #print(f"Alternative component found: {alternative_component}")
+                #         #logger.info(f"Alternative component found: {alternative_component}")
+                #     else:
+                #         #logger.warning(f"No alternative found for component {component.no}. Skipping this component.")
+                #         continue
+                # component.quantity = valid_quantity
                 component.gross_price = component.unit_price * component.quantity
                 subtotal += component.gross_price
             else:
